@@ -17,6 +17,7 @@ const { Transaction } = await import("@/models/Transaction");
 const { MerchantOverride } = await import("@/models/MerchantOverride");
 const { Twin } = await import("@/models/Twin");
 const twinRoute = await import("./twin/route");
+const monthsRoute = await import("./months/route");
 const me = await import("./me/route");
 const txns = await import("./transactions/route");
 const overrides = await import("./overrides/route");
@@ -274,6 +275,31 @@ describe.skipIf(!mongoUp)("API routes (local MongoDB)", () => {
     await txns.POST(req("/api/transactions", "POST", { transactions: [{ ...txn(1, "Sunita Devi"), type: "CR", amount: 1500 }] }));
     const res = await overrides.PUT(req("/api/overrides", "PUT", { overrides: [{ counterparty: "Sunita Devi", category: "Scholarship", nickname: "Scholarship trust" }] }));
     expect(await res.json()).toEqual({ saved: 1, relabelledTransactions: 1 });
+  });
+
+  test("months: one row per month in India time, with spent and came in", async () => {
+    await txns.POST(
+      req("/api/transactions", "POST", {
+        transactions: [
+          { ...txn(1), amount: 100, datetime: "2026-07-31T23:30:00+05:30" }, // 31 Jul in India (18:00 UTC)
+          { ...txn(2), amount: 200, datetime: "2026-08-01T00:30:00+05:30" }, // 1 Aug in India, still 31 Jul in UTC
+          { ...txn(3, "Ramesh Kumar", "Family Support"), type: "CR", amount: 8000, datetime: "2026-08-01T09:00:00+05:30" },
+          { ...txn(4, "Arjun P", "Friend"), amount: 500, datetime: "2026-08-05T20:00:00+05:30" }, // lent: not spending
+          { ...txn(5, "Me", "Self Transfer"), type: "CR", amount: 3000, datetime: "2026-08-06T10:00:00+05:30" }, // not income
+          { ...txn(6), amount: 50, datetime: "2026-09-02T13:00:00+05:30" },
+        ],
+      }),
+    );
+    const body = await (await monthsRoute.GET()).json();
+    expect(body.months).toEqual([
+      { month: "2026-07", count: 1, spent: 100, received: 0 },
+      { month: "2026-08", count: 4, spent: 200, received: 8000 },
+      { month: "2026-09", count: 1, spent: 50, received: 0 },
+    ]);
+    signInAs(bob);
+    expect((await (await monthsRoute.GET()).json()).months).toEqual([]);
+    signInAs(null);
+    expect((await monthsRoute.GET()).status).toBe(401);
   });
 
   test("the twin is saved to the account and read back", async () => {
