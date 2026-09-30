@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
+import { HydrationMarker } from "@/components/app/hydration-marker";
+import { TwinSync } from "@/game/twin-sync";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -32,9 +34,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en-IN"
+      suppressHydrationWarning // data-hydrated is added on the client after load
       className={`${geistSans.variable} ${geistMono.variable} ${display.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <HydrationMarker />
+        <TwinSync />
+        {children}
+      </body>
     </html>
   );
 }

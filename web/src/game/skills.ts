@@ -11,6 +11,7 @@ export interface SkillBook {
   learned: Partial<Record<LessonId, { correct: boolean; at: string }>>;
   /** Numbers from the last month played, so replayed lessons still use the player's own money. */
   context: LessonContext;
+  updatedAt?: string; // for merging the browser copy with the account copy
 }
 
 const KEY = "money-twin:skills";
@@ -19,7 +20,7 @@ const listeners = new Set<() => void>();
 let cachedRaw: string | null | undefined;
 let cached: SkillBook = EMPTY;
 
-function read(): SkillBook {
+export function readSkills(): SkillBook {
   let raw: string | null = null;
   try {
     raw = localStorage.getItem(KEY);
@@ -37,7 +38,8 @@ function read(): SkillBook {
   return cached;
 }
 
-function write(book: SkillBook) {
+/** Writes a skill book as-is (used directly when restoring the copy from the account). */
+export function applySkills(book: SkillBook) {
   try {
     localStorage.setItem(KEY, JSON.stringify(book));
   } catch {
@@ -49,7 +51,7 @@ function write(book: SkillBook) {
 
 /** Records a finished lesson. XP is only awarded the first time. Returns the XP earned. */
 export function learnLesson(id: LessonId, correct: boolean): number {
-  const book = read();
+  const book = readSkills();
   if (book.learned[id]) return 0;
   const xp = correct ? XP_CORRECT : XP_TRIED;
   write({ ...book, xp: book.xp + xp, learned: { ...book.learned, [id]: { correct, at: new Date().toISOString() } } });
@@ -57,7 +59,12 @@ export function learnLesson(id: LessonId, correct: boolean): number {
 }
 
 export function saveLessonContext(context: LessonContext) {
-  write({ ...read(), context });
+  write({ ...readSkills(), context });
+}
+
+/** A change the player made: stamped now, so it wins when merged with the account copy. */
+function write(book: SkillBook) {
+  applySkills({ ...book, updatedAt: new Date().toISOString() });
 }
 
 export function resetSkills() {
@@ -68,7 +75,7 @@ export function abilitiesOf(book: SkillBook): Ability[] {
   return (Object.keys(book.learned) as LessonId[]).flatMap((id) => (ABILITY_OF[id] ? [ABILITY_OF[id]!] : []));
 }
 
-function subscribe(l: () => void) {
+export function subscribeSkills(l: () => void) {
   listeners.add(l);
   const onStorage = (e: StorageEvent) => e.key === KEY && l();
   window.addEventListener("storage", onStorage);
@@ -79,5 +86,5 @@ function subscribe(l: () => void) {
 }
 
 export function useSkills(): SkillBook {
-  return useSyncExternalStore(subscribe, read, () => EMPTY);
+  return useSyncExternalStore(subscribeSkills, readSkills, () => EMPTY);
 }

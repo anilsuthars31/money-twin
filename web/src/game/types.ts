@@ -47,6 +47,7 @@ export interface Character {
   city: string;
   avatarSeed: string;
   createdAt: string;
+  updatedAt?: string; // for merging the browser copy with the account copy
 }
 
 // ---------------------------------------------------------------- budget envelopes

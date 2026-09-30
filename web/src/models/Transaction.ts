@@ -1,4 +1,5 @@
 import { Schema, Types, model, models, type InferSchemaType, type Model } from "mongoose";
+import { resetModelInDev } from "@/lib/model";
 import { ALL_CATEGORIES } from "@/lib/categories";
 
 // A categorised transaction, parsed in the browser. Never the raw statement: no description text
@@ -27,5 +28,5 @@ transactionSchema.index({ userId: 1, payeeKey: 1 });
 
 export type TransactionDoc = InferSchemaType<typeof transactionSchema>;
 
-export const Transaction: Model<TransactionDoc> =
-  (models.Transaction as Model<TransactionDoc>) ?? model<TransactionDoc>("Transaction", transactionSchema);
+resetModelInDev("Transaction");
+export const Transaction: Model<TransactionDoc> = (models.Transaction as Model<TransactionDoc>) ?? model<TransactionDoc>("Transaction", transactionSchema);

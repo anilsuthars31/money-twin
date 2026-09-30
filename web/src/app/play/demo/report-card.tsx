@@ -1,5 +1,6 @@
-import { ArrowRight, Lightbulb, RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { ArrowRight, Lightbulb, RotateCcw, ShieldCheck } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { CountUp } from "@/components/twin/count-up";
 import { ENVELOPE_STYLE } from "@/components/twin/envelope-bars";
 import { LESSON_INFO } from "@/game/lessons";
@@ -158,6 +159,16 @@ export function ReportCard({
         <Button size="xl" className="mt-4 w-full" onClick={onLearn}>
           {newLessons.length ? "Learn" : "Continue"} <ArrowRight data-icon="inline-end" />
         </Button>
+      </section>
+
+      <section data-card className="rounded-3xl bg-card p-5 text-center ring-1 ring-money/30">
+        <h3 className="text-xl font-bold text-balance">That was a sample month. Want to see yours?</h3>
+        <p className="mt-2 text-sm text-muted-foreground text-pretty">
+          Add your Kotak statement and your twin lives your real months. The file is read on your device and never uploaded.
+        </p>
+        <Link href="/upload" className={cn(buttonVariants({ size: "xl" }), "mt-4 w-full")}>
+          <ShieldCheck data-icon="inline-start" /> Bring your twin to life
+        </Link>
       </section>
 
       <Button variant="ghost" size="lg" className="h-12 w-full rounded-2xl text-base" onClick={onReplay}>

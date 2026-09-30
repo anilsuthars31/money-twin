@@ -55,5 +55,16 @@ export const ALL_CATEGORIES = [...new Set<string>([...TEACH_CATEGORIES, ...RULE_
 
 export type TeachCategory = (typeof TEACH_CATEGORIES)[number];
 
+/**
+ * What a label means for one transaction. "Family" depends on direction (money from family is
+ * support, money to family is sent home) and "Self" is a transfer between your own accounts.
+ * Used by both the browser and the API, so a label always lands the same way.
+ */
+export function categoryForLabel(label: string, type: "DR" | "CR"): string {
+  if (label === "Self") return "Self Transfer";
+  if (label === "Family") return type === "CR" ? "Family Support" : "Sent to Family";
+  return label;
+}
+
 /** How payee names are compared: case-insensitive, spaces ignored ("Ramesh Kumar" → "rameshkumar"). */
 export const payeeKey = (name: string) => name.toLowerCase().replace(/\s+/g, "");

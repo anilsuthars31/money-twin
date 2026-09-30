@@ -1,4 +1,5 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
+import { resetModelInDev } from "@/lib/model";
 
 // One document per person who signs in. Created or updated on every sign-in (see src/auth.ts).
 const userSchema = new Schema(
@@ -14,4 +15,5 @@ const userSchema = new Schema(
 
 export type UserDoc = InferSchemaType<typeof userSchema>;
 
+resetModelInDev("User");
 export const User: Model<UserDoc> = (models.User as Model<UserDoc>) ?? model<UserDoc>("User", userSchema);

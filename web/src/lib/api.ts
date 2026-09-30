@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
+import { LESSON_ORDER } from "@/game/lessons";
 import { ALL_CATEGORIES } from "@/lib/categories";
 import { connectDb } from "@/lib/db";
 
@@ -73,9 +74,60 @@ export const saveTransactionsBody = z.object({ transactions: z.array(transaction
 export const saveOverridesBody = z
   .object({
     overrides: z
-      .array(z.object({ counterparty: z.string().trim().min(1).max(80), category }).strict())
+      .array(
+        z
+          .object({
+            counterparty: z.string().trim().min(1).max(80),
+            category,
+            // A nickname to show instead of the UPI name. Omit to keep the current one, null to remove it.
+            nickname: z.string().trim().min(1).max(40).nullable().optional(),
+          })
+          .strict(),
+      )
       .min(1)
       .max(500),
+  })
+  .strict();
+
+const isoish = z.string().max(40);
+
+/** The twin as the browser stores it (see src/game/character.ts and src/game/skills.ts). */
+export const twinBody = z
+  .object({
+    character: z
+      .object({
+        type: z.enum(["student", "first-job", "professional"]),
+        name: z.string().trim().min(1).max(20),
+        city: z.string().trim().min(1).max(40),
+        avatarSeed: z.string().min(1).max(80),
+        createdAt: isoish.default(""),
+        updatedAt: isoish.default(""),
+      })
+      .strict()
+      .nullable()
+      .optional(),
+    skills: z
+      .object({
+        xp: z.number().int().min(0).max(100_000),
+        learned: z.partialRecord(z.enum(LESSON_ORDER as [string, ...string[]]), z.object({ correct: z.boolean(), at: isoish }).strict()),
+        context: z
+          .object({
+            monthName: z.string().max(20),
+            income: z.number().nonnegative().max(1e8),
+            microPerDay: z.number().nonnegative().max(1e7),
+            deliveryOrders: z.number().int().nonnegative().max(10_000),
+            deliveryAvg: z.number().nonnegative().max(1e7),
+            week1Spent: z.number().nonnegative().max(1e9),
+            fixedCosts: z.number().nonnegative().max(1e9),
+            biggestBuy: z.object({ amount: z.number().nonnegative(), counterparty: z.string().max(80) }).strict().optional(),
+          })
+          .strict()
+          .optional(),
+        updatedAt: isoish.default(""),
+      })
+      .strict()
+      .nullable()
+      .optional(),
   })
   .strict();
 

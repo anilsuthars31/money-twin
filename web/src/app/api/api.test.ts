@@ -15,6 +15,8 @@ vi.mock("@/auth", () => ({ auth: async () => session.current }));
 const { User } = await import("@/models/User");
 const { Transaction } = await import("@/models/Transaction");
 const { MerchantOverride } = await import("@/models/MerchantOverride");
+const { Twin } = await import("@/models/Twin");
+const twinRoute = await import("./twin/route");
 const me = await import("./me/route");
 const txns = await import("./transactions/route");
 const overrides = await import("./overrides/route");
@@ -52,10 +54,10 @@ const signInAs = (id: string | null) => {
 describe.skipIf(!mongoUp)("API routes (local MongoDB)", () => {
   beforeAll(async () => {
     await mongoose.connection.dropDatabase();
-    await Promise.all([User.init(), Transaction.init(), MerchantOverride.init()]); // build unique indexes
+    await Promise.all([User.init(), Transaction.init(), MerchantOverride.init(), Twin.init()]); // build unique indexes
   });
   beforeEach(async () => {
-    await Promise.all([User.deleteMany({}), Transaction.deleteMany({}), MerchantOverride.deleteMany({})]);
+    await Promise.all([User.deleteMany({}), Transaction.deleteMany({}), MerchantOverride.deleteMany({}), Twin.deleteMany({})]);
     alice = String((await User.create({ email: "alice@example.com", name: "Alice" }))._id);
     bob = String((await User.create({ email: "bob@example.com", name: "Bob" }))._id);
     signInAs(alice);
@@ -85,6 +87,8 @@ describe.skipIf(!mongoUp)("API routes (local MongoDB)", () => {
     const body = await (await me.GET()).json();
     expect(body.user.email).toBe("alice@example.com");
     expect(body.counts).toEqual({ transactions: 2, overrides: 0 });
+    expect(body.savedRange).toEqual({ count: 2, from: expect.stringMatching(/^2026-08-01/), to: expect.stringMatching(/^2026-08-02/) });
+    expect(body.twin).toBe(false);
   });
 
   test("saving transactions dedupes re-uploads by fingerprint", async () => {
@@ -147,7 +151,16 @@ describe.skipIf(!mongoUp)("API routes (local MongoDB)", () => {
     expect(labels.overrides[0]).toMatchObject({ key: "manjunaths", category: "Rent/PG" });
   });
 
-  test("family and self can be tagged", async () => {
+  test("family and self can be tagged, and land by direction", async () => {
+    await txns.POST(
+      req("/api/transactions", "POST", {
+        transactions: [
+          { ...txn(1, "Ramesh Kumar"), type: "CR" },
+          { ...txn(2, "Ramesh Kumar"), type: "DR" },
+          txn(3, "My Own Name"),
+        ],
+      }),
+    );
     const res = await overrides.PUT(
       req("/api/overrides", "PUT", {
         overrides: [
@@ -156,7 +169,12 @@ describe.skipIf(!mongoUp)("API routes (local MongoDB)", () => {
         ],
       }),
     );
-    expect((await res.json()).saved).toBe(2);
+    expect(await res.json()).toEqual({ saved: 2, relabelledTransactions: 3 });
+    const list = (await (await txns.GET(req("/api/transactions"))).json()).transactions as { amount: number; category: string }[];
+    const by = Object.fromEntries(list.map((t) => [t.amount, t.category]));
+    expect(by).toEqual({ 41: "Family Support", 42: "Sent to Family", 43: "Self Transfer" });
+    // The label itself is stored as given.
+    expect((await (await overrides.GET()).json()).overrides.map((o: { category: string }) => o.category).sort()).toEqual(["Family", "Self"]);
   });
 
   test("one user can never see or change another user's data", async () => {
@@ -183,11 +201,77 @@ describe.skipIf(!mongoUp)("API routes (local MongoDB)", () => {
   test("Delete all my data removes transactions, labels and the account", async () => {
     await txns.POST(req("/api/transactions", "POST", { transactions: [txn(1), txn(2)] }));
     await overrides.PUT(req("/api/overrides", "PUT", { overrides: [{ counterparty: "Manjunath S", category: "Food" }] }));
+    await twinRoute.PUT(req("/api/twin", "PUT", { character: TWIN_CHARACTER }));
     const res = await me.DELETE();
-    expect(await res.json()).toEqual({ deleted: { transactions: 2, overrides: 1, account: true } });
+    expect(await res.json()).toEqual({ deleted: { transactions: 2, overrides: 1, twin: true, account: true } });
+    expect(await Twin.countDocuments({ userId: alice })).toBe(0);
     expect(await Transaction.countDocuments({ userId: alice })).toBe(0);
     expect(await MerchantOverride.countDocuments({ userId: alice })).toBe(0);
     expect(await User.findById(alice)).toBeNull();
     expect(await User.findById(bob)).not.toBeNull();
   });
+
+  test("payee nicknames are saved, kept when omitted, and removed with null", async () => {
+    await overrides.PUT(req("/api/overrides", "PUT", { overrides: [{ counterparty: "Kiran Traders", category: "Health", nickname: "Gym trainer" }] }));
+    const get = async () => (await (await overrides.GET()).json()).overrides[0];
+    expect(await get()).toMatchObject({ counterparty: "Kiran Traders", category: "Health", nickname: "Gym trainer" });
+
+    await overrides.PUT(req("/api/overrides", "PUT", { overrides: [{ counterparty: "Kiran Traders", category: "Health" }] }));
+    expect((await get()).nickname).toBe("Gym trainer"); // omitted: kept
+
+    await overrides.PUT(req("/api/overrides", "PUT", { overrides: [{ counterparty: "Kiran Traders", category: "Health", nickname: null }] }));
+    expect(await get()).not.toHaveProperty("nickname"); // null: removed
+
+    const tooLong = await overrides.PUT(req("/api/overrides", "PUT", { overrides: [{ counterparty: "X", category: "Food", nickname: "n".repeat(41) }] }));
+    expect(tooLong.status).toBe(400);
+  });
+
+  test("friends are labelled as Friend in both directions", async () => {
+    await txns.POST(req("/api/transactions", "POST", { transactions: [{ ...txn(1, "Arjun P"), type: "CR" }, txn(2, "Arjun P")] }));
+    await overrides.PUT(req("/api/overrides", "PUT", { overrides: [{ counterparty: "Arjun P", category: "Friend" }] }));
+    const list = (await (await txns.GET(req("/api/transactions"))).json()).transactions as { category: string }[];
+    expect(list.map((t) => t.category)).toEqual(["Friend", "Friend"]);
+  });
+
+  test("the twin is saved to the account and read back", async () => {
+    expect(await (await twinRoute.GET()).json()).toEqual({ twin: null });
+    const skills = {
+      xp: 40,
+      learned: { impulse: { correct: true, at: "2026-09-11T09:00:00Z" }, delivery: { correct: false, at: "2026-09-11T09:05:00Z" } },
+      updatedAt: "2026-09-11T09:05:00Z",
+    };
+    const res = await twinRoute.PUT(req("/api/twin", "PUT", { character: TWIN_CHARACTER, skills }));
+    expect(res.status).toBe(200);
+    const { twin } = await (await twinRoute.GET()).json();
+    expect(twin.character).toMatchObject({ name: "Kavya", city: "Pune" });
+    expect(twin.skills).toMatchObject({ xp: 40, learned: skills.learned });
+
+    // Sending only one part keeps the other.
+    await twinRoute.PUT(req("/api/twin", "PUT", { character: { ...TWIN_CHARACTER, name: "Kavya R" } }));
+    const again = (await (await twinRoute.GET()).json()).twin;
+    expect(again.character.name).toBe("Kavya R");
+    expect(again.skills.xp).toBe(40);
+    expect((await (await me.GET()).json()).twin).toBe(true);
+  });
+
+  test("the twin API rejects bad input and keeps twins per user", async () => {
+    expect((await twinRoute.PUT(req("/api/twin", "PUT", { character: { ...TWIN_CHARACTER, type: "wizard" } }))).status).toBe(400);
+    expect((await twinRoute.PUT(req("/api/twin", "PUT", { skills: { xp: 10, learned: { hacking: { correct: true, at: "" } } } }))).status).toBe(400);
+    expect((await twinRoute.PUT(req("/api/twin", "PUT", { character: TWIN_CHARACTER, password: "x" }))).status).toBe(400);
+
+    await twinRoute.PUT(req("/api/twin", "PUT", { character: TWIN_CHARACTER }));
+    signInAs(bob);
+    expect(await (await twinRoute.GET()).json()).toEqual({ twin: null });
+    signInAs(null);
+    expect((await twinRoute.GET()).status).toBe(401);
+  });
 });
+
+const TWIN_CHARACTER = {
+  type: "student",
+  name: "Kavya",
+  city: "Pune",
+  avatarSeed: "kavya-1",
+  createdAt: "2026-09-10T10:00:00Z",
+  updatedAt: "2026-09-10T10:00:00Z",
+};

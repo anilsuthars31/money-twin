@@ -106,6 +106,16 @@
   letter-spacing: -0.03em;
 }
 
+/* Until the page is interactive, clicks on buttons and form controls would do nothing, so show them
+   as not ready yet (see HydrationMarker). Links keep working: they navigate without JavaScript. */
+html:not([data-hydrated]) :is(button, input, select, textarea, label[for], [role="button"], [role="radio"]) {
+  pointer-events: none;
+  cursor: progress;
+}
+html:not([data-hydrated]) :is(button, [role="button"], [role="radio"]) {
+  opacity: 0.55;
+}
+
 @keyframes shake {
   0%,
   100% {

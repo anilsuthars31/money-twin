@@ -441,10 +441,10 @@
                 "overrides"
               ]
             },
-            "description": "Upserts labels and re-labels matching saved transactions (name compared without case or spaces).",
+            "description": "Upserts labels and re-labels matching saved transactions (name compared without case or spaces). Family becomes Family Support (money in) or Sent to Family (money out); Self is a transfer; Friend is a split/loan. Optional `nickname` (max 40) is shown instead of the UPI name; omit to keep it, null to remove it.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"overrides\": [\n    {\n      \"counterparty\": \"Manjunath S\",\n      \"category\": \"Food\"\n    },\n    {\n      \"counterparty\": \"Ramesh Kumar\",\n      \"category\": \"Family\"\n    },\n    {\n      \"counterparty\": \"My Own Name\",\n      \"category\": \"Self\"\n    }\n  ]\n}",
+              "raw": "{\n  \"overrides\": [\n    {\n      \"counterparty\": \"Manjunath S\",\n      \"category\": \"Food\",\n      \"nickname\": \"Canteen uncle\"\n    },\n    {\n      \"counterparty\": \"Ramesh Kumar\",\n      \"category\": \"Family\"\n    },\n    {\n      \"counterparty\": \"My Own Name\",\n      \"category\": \"Self\"\n    },\n    {\n      \"counterparty\": \"Arjun P\",\n      \"category\": \"Friend\"\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -458,7 +458,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('3 saved', () => pm.expect(pm.response.json().saved).to.eql(3));",
+                  "pm.test('4 saved', () => pm.expect(pm.response.json().saved).to.eql(4));",
                   "pm.test('both Manjunath S rows re-labelled', () => pm.expect(pm.response.json().relabelledTransactions).to.eql(2));"
                 ]
               }
@@ -488,7 +488,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('3 labels', () => pm.expect(pm.response.json().overrides.length).to.eql(3));"
+                  "pm.test('4 labels', () => pm.expect(pm.response.json().overrides.length).to.eql(4));",
+                  "pm.test('nickname returned', () => {",
+                  "  const m = pm.response.json().overrides.find(o => o.counterparty === 'Manjunath S');",
+                  "  pm.expect(m.nickname).to.eql('Canteen uncle');",
+                  "});"
                 ]
               }
             }
@@ -557,7 +561,131 @@
       ]
     },
     {
-      "name": "5. Delete all my data",
+      "name": "5. Twin (character and Money Skills book)",
+      "item": [
+        {
+          "name": "Save my twin",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/twin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "twin"
+              ]
+            },
+            "description": "Saves the twin to the account so it follows the player across devices. Parts left out are kept; null clears a part.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"character\": {\n    \"type\": \"student\",\n    \"name\": \"Kavya\",\n    \"city\": \"Pune\",\n    \"avatarSeed\": \"kavya-1\",\n    \"createdAt\": \"2026-09-10T10:00:00Z\",\n    \"updatedAt\": \"2026-09-10T10:00:00Z\"\n  },\n  \"skills\": {\n    \"xp\": 40,\n    \"learned\": {\n      \"impulse\": {\n        \"correct\": true,\n        \"at\": \"2026-09-11T09:00:00Z\"\n      },\n      \"delivery\": {\n        \"correct\": false,\n        \"at\": \"2026-09-11T09:05:00Z\"\n      }\n    },\n    \"updatedAt\": \"2026-09-11T09:05:00Z\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('saved', () => pm.expect(pm.response.json().twin.character.name).to.eql('Kavya'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get my twin",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/twin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "twin"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('twin returned', () => {",
+                  "  const t = pm.response.json().twin;",
+                  "  pm.expect(t.character.city).to.eql('Pune');",
+                  "  pm.expect(t.skills.xp).to.eql(40);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rejected: unknown character type",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/twin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "twin"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"character\": {\n    \"type\": \"wizard\",\n    \"name\": \"X\",\n    \"city\": \"Y\",\n    \"avatarSeed\": \"z\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Delete all my data",
       "item": [
         {
           "name": "Delete all my data",
@@ -574,7 +702,7 @@
                 "me"
               ]
             },
-            "description": "Removes transactions, payee labels and the account. The app then signs the user out."
+            "description": "Removes transactions, payee labels, the twin and the account. The app then signs the user out."
           },
           "event": [
             {
@@ -585,7 +713,8 @@
                   "pm.test('everything deleted', () => {",
                   "  const d = pm.response.json().deleted;",
                   "  pm.expect(d.transactions).to.eql(3);",
-                  "  pm.expect(d.overrides).to.eql(2);",
+                  "  pm.expect(d.overrides).to.eql(3);",
+                  "  pm.expect(d.twin).to.eql(true);",
                   "  pm.expect(d.account).to.eql(true);",
                   "});"
                 ]

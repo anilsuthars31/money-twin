@@ -80,6 +80,9 @@ Don't ask for a bank statement first; users won't trust a new app with money dat
   `AUTH_DEV_LOGIN` out of production env vars anyway.
 - Suggested collections: `users`, `characters` (stats, level, type), `transactions` (categorised only, never raw
   files), `merchantOverrides` (per-user payee → category), `chapters` (monthly events + report card), `goals`
+- Buttons and form controls show as disabled until the page has hydrated (`HydrationMarker` + CSS), so early clicks
+  are never swallowed.
+- In dev, models call `resetModelInDev()` so schema changes apply without restarting `npm run dev`.
 - API testing: Postman. When you add or change an API route, also update `postman/money-twin.postman_collection.json`
   so every endpoint can be tested there.
 - Python parser service (current: `parser/kotak_parser.py`; pdfplumber for PDFs later), or port it to TypeScript
@@ -97,6 +100,10 @@ Don't ask for a bank statement first; users won't trust a new app with money dat
   `ATL` (ATM), `811:BD` (bill pay), `CASHBACK EARNED`, `811 SUPER CASHBACK`, `Int.Pd` (interest),
   `Cash Deposit`, `Ac xfr from gl` (internal, ignore).
 - UPI names are truncated to 15 characters.
+- Privacy rules in the TypeScript port: bank-generated rows (charges, cashback, interest, deposits, transfers) get a
+  plain label instead of their description, and digit runs of 6+ in payee names are masked to the last 4
+  (phone numbers used as UPI names, merchant IDs). Short keywords (< 6 letters) must start a word; longer brand
+  keywords match anywhere because UPI names are run together.
 
 ## Current status
 - [x] Kotak CSV parser + rules categoriser with confidence levels (high / medium / low / user)
@@ -115,8 +122,17 @@ Don't ask for a bank statement first; users won't trust a new app with money dat
       Sign-in UX: returns to `?callbackUrl=` (same-site paths only, default `/account`); Google always shows its account
       chooser; signed-in landing shows "Welcome back" instead of the hero; header shows Sign in / avatar.
       E2E tests: `npm run test:e2e` (Playwright, installed Chrome, dev server).
-- [ ] In-browser statement upload + privacy screen (TypeScript port of the parser)
-- [ ] Teach-your-twin swipe cards
+- [x] In-browser statement upload + privacy screen at `/upload`: TypeScript port in `web/src/lib/statement/`
+      (parity with the Python parser checked on real statements by a local-only test). The file is read with
+      File.text() and never sent; e2e test checks no request contains raw statement text. Sign-in is asked for only
+      at "Save" (categorised data waits in sessionStorage during sign-in, cleared after saving).
+- [x] Teach-your-twin: "Who's who?" (Family · Me (my other account) · Friend · Other, no surname rules; Other needs a
+      nickname + category), swipe cards (unmarked people first, then top 20 unknown payees; 6 likeliest categories +
+      "More"; optional nickname with quick chips), understanding meter. Labels + nicknames saved as merchant overrides.
+      Friend transfers are splits/loans: not income or spending, netted per friend (`friendBalances`).
+- [x] Twin in the account: `twins` collection + `/api/twin`; `TwinSync` merges browser and account copies
+      (newest character, union of learned lessons, XP recalculated). Browser-only when signed out.
+      Home page shows saved transactions ("51 transactions saved, Jul–Aug 2026").
 - [ ] Replay last 6 months as chapters + dashboard
 - [ ] Goals, alerts, lessons, budget planner
 - [ ] Account Aggregator sandbox (bonus)
