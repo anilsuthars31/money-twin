@@ -71,7 +71,7 @@ export const payeeKey = (name: string) => name.toLowerCase().replace(/\s+/g, "")
 /** India-time parts of a timestamp. */
 export function ist(iso: string) {
   const d = new Date(Date.parse(iso) + 5.5 * 3600_000);
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), weekday: d.getUTCDay() };
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), weekday: d.getUTCDay() };
 }
 
 export const monthKeyOf = (iso: string) => {

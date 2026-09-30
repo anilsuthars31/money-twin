@@ -8,7 +8,7 @@ import { inr, type EnvelopeReview, type Grade, type ReportCard as Report } from 
 import type { LessonId } from "@/game/types";
 import { cn } from "@/lib/utils";
 
-const GRADE_STYLE: Record<Grade, string> = {
+export const GRADE_STYLE: Record<Grade, string> = {
   A: "text-money ring-money/50 bg-money/10",
   B: "text-goal ring-goal/50 bg-goal/10",
   C: "text-happy ring-happy/50 bg-happy/10",
@@ -16,7 +16,7 @@ const GRADE_STYLE: Record<Grade, string> = {
 };
 
 /** Planned vs actual for one envelope. Overspending shows as an amber overflow past the plan line. */
-function EnvelopeRow({ e }: { e: EnvelopeReview }) {
+export function EnvelopeRow({ e }: { e: EnvelopeReview }) {
   const s = ENVELOPE_STYLE[e.env];
   const isSavings = e.env === "savings";
   const scale = Math.max(e.budget, Math.abs(e.actual), 1);
@@ -46,7 +46,7 @@ function EnvelopeRow({ e }: { e: EnvelopeReview }) {
       </div>
       <div className="relative mt-2 flex h-2.5 overflow-hidden rounded-full bg-white/[0.06]">
         <div data-split className={cn("h-full origin-left", s.bar)} style={{ width: `${within * 100}%` }} />
-        {over > 0 && <div data-split className="h-full origin-left bg-alert" style={{ width: `${over * 100}%` }} />}
+        {over > 0 && <div data-split className={cn("h-full origin-left", isSavings ? "bg-money/50" : "bg-alert")} style={{ width: `${over * 100}%` }} />}
         <div className="absolute inset-y-0 w-0.5 bg-white/80" style={{ left: `calc(${planLine * 100}% - 1px)` }} />
       </div>
       <p className="mt-2 text-[13px] text-muted-foreground text-pretty">{e.verdict}</p>

@@ -374,6 +374,41 @@
           ]
         },
         {
+          "name": "Months with data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/months",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "months"
+              ]
+            },
+            "description": "Every month with saved transactions (India time), oldest first, with what was spent and what came in. Used by the Replay month picker. Friend and self-transfer money is neither spent nor received."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('August 2026 listed with its totals', () => {",
+                  "  const m = pm.response.json().months;",
+                  "  const aug = m.find((x) => x.month === '2026-08');",
+                  "  pm.expect(aug).to.be.an('object');",
+                  "  pm.expect(aug.count).to.be.above(0);",
+                  "  pm.expect(aug).to.have.all.keys('month', 'count', 'spent', 'received');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Rejected: raw description included",
           "request": {
             "method": "POST",
@@ -561,7 +596,7 @@
       ]
     },
     {
-      "name": "5. Twin (character and Money Skills book)",
+      "name": "5. Twin (character, Money Skills book, replay progress)",
       "item": [
         {
           "name": "Save my twin",
@@ -607,6 +642,86 @@
           ]
         },
         {
+          "name": "Save replay progress",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"replay\": {\n    \"months\": {\n      \"2026-08\": {\n        \"grade\": \"B\",\n        \"score\": 74,\n        \"savingsKept\": 3200,\n        \"stats\": {\n          \"savings\": 40,\n          \"happiness\": 62,\n          \"stress\": 35,\n          \"goal\": 100\n        },\n        \"plan\": {\n          \"needs\": 50,\n          \"wants\": 30,\n          \"savings\": 20,\n          \"emergency\": 0\n        },\n        \"playedAt\": \"2026-09-12T10:00:00Z\"\n      }\n    },\n    \"updatedAt\": \"2026-09-12T10:00:00Z\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/twin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "twin"
+              ]
+            },
+            "description": "Grades of replayed real months: results only (grade, score, savings kept, end stats, plan). Sending only `replay` keeps the character and skills."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('saved, character kept', () => {",
+                  "  const t = pm.response.json().twin;",
+                  "  pm.expect(t.replay.months['2026-08'].grade).to.eql('B');",
+                  "  pm.expect(t.character).to.be.an('object');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rejected: transactions inside replay progress",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"replay\": {\n    \"months\": {\n      \"2026-08\": {\n        \"grade\": \"B\",\n        \"score\": 74,\n        \"savingsKept\": 3200,\n        \"stats\": {\n          \"savings\": 40,\n          \"happiness\": 62,\n          \"stress\": 35,\n          \"goal\": 100\n        },\n        \"plan\": {\n          \"needs\": 50,\n          \"wants\": 30,\n          \"savings\": 20,\n          \"emergency\": 0\n        },\n        \"playedAt\": \"2026-09-12T10:00:00Z\",\n        \"txns\": []\n      }\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/twin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "twin"
+              ]
+            },
+            "description": "Replay progress never carries transactions; unknown fields are rejected."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400: results only', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Get my twin",
           "request": {
             "method": "GET",
@@ -633,6 +748,7 @@
                   "  const t = pm.response.json().twin;",
                   "  pm.expect(t.character.city).to.eql('Pune');",
                   "  pm.expect(t.skills.xp).to.eql(40);",
+                  "  pm.expect(t.replay.months['2026-08'].score).to.eql(74);",
                   "});"
                 ]
               }

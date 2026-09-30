@@ -56,7 +56,11 @@ export function WelcomeBack({
         </div>
 
         <div className="mt-8 space-y-3">
-          <Link href={hasTwin ? "/play/demo" : "/create"} className={cn(buttonVariants({ size: "xl" }), "w-full")}>
+          {/* Real months saved → replay them; otherwise the demo month (or make a twin first). */}
+          <Link
+            href={!hasTwin ? "/create" : saved ? "/replay" : "/play/demo"}
+            className={cn(buttonVariants({ size: "xl" }), "w-full")}
+          >
             Continue your twin <ArrowRight data-icon="inline-end" />
           </Link>
           {saved ? (
@@ -89,6 +93,11 @@ export function WelcomeBack({
           >
             <BookOpen className="size-4 text-goal" /> Money Skills book
           </Link>
+          {saved && hasTwin && (
+            <Link href="/play/demo" className="block py-1 text-center text-sm text-muted-foreground underline-offset-4 hover:underline">
+              Play the demo month
+            </Link>
+          )}
         </div>
       </main>
     </div>

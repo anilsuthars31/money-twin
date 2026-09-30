@@ -14,7 +14,7 @@ const HINT: Record<Envelope, string> = {
 };
 
 /** Moving one slider rebalances the others (in proportion) so the plan always adds up to 100%. */
-function rebalance(plan: Plan, envs: Envelope[], env: Envelope, value: number): Plan {
+export function rebalance(plan: Plan, envs: Envelope[], env: Envelope, value: number): Plan {
   const v = Math.max(0, Math.min(100, value));
   const others = envs.filter((e) => e !== env);
   const oldRest = others.reduce((s, e) => s + plan[e], 0);

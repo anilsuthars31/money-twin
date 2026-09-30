@@ -422,11 +422,11 @@ export function UploadFlow({ signedIn, accountName }: { signedIn: boolean; accou
             </section>
             {friends.friends.length > 0 && <FriendsCard friends={friends} />}
             <p className="px-1 text-center text-sm text-muted-foreground">Next up: replay your real past, one month at a time.</p>
-            <Link href="/account" className={cn(buttonVariants({ size: "xl" }), "w-full")}>
-              See what&apos;s saved <ArrowRight data-icon="inline-end" />
+            <Link href="/replay" className={cn(buttonVariants({ size: "xl" }), "w-full")}>
+              Replay your months <ArrowRight data-icon="inline-end" />
             </Link>
-            <Link href="/" className="block py-2 text-center text-sm text-muted-foreground underline-offset-4 hover:underline">
-              Back to your twin
+            <Link href="/account" className="block py-2 text-center text-sm text-muted-foreground underline-offset-4 hover:underline">
+              See what&apos;s saved
             </Link>
           </div>
         )}

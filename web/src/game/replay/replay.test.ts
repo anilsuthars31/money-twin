@@ -58,7 +58,12 @@ describe("event template library", () => {
   test("a big buy is scaled to income: ₹1,299 is big on ₹8,000, not on ₹30,000", () => {
     const student = fire("big-buy", ctxFor(hostelStudent(), 1));
     expect(student?.title).toBe("Big buy: ₹1,299");
-    expect(student?.body).toContain("6 Aug");
+    expect(student?.body).toContain("6 Aug at 11:48pm");
+    // The same late-night buy isn't told twice.
+    const c = ctxFor(hostelStudent(), 1);
+    expect(fire("midnight-cart", c)?.body).toContain("11:48pm");
+    c.fired.add("big-buy-1");
+    expect(fire("midnight-cart", c)).toBeNull();
     expect(fire("big-buy", ctxFor(firstJob(), 1))).toBeNull();
     // ₹2,499 at Myntra is 8% of ₹30,000: big for Rahul too.
     expect(fire("big-buy", ctxFor(firstJob(), 3))?.amount).toBe(2499);

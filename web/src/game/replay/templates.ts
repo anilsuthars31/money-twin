@@ -64,6 +64,12 @@ const monthSoFar = (c: TemplateCtx) => [...c.before, ...c.weekTxns];
 const biggest = (ts: RealTxn[]) => [...ts].sort((a, b) => b.amount - a.amount)[0];
 const isWeekend = (t: RealTxn) => [0, 6].includes(ist(t.datetime).weekday);
 const isShare = (c: TemplateCtx, t: RealTxn) => c.m.friendModes[payeeKey(t.counterparty)] === "share";
+const isLateNight = (t: RealTxn) => hourOf(t) >= 23 || hourOf(t) < 4;
+/** "11:48pm" in India time. */
+const clock = (t: RealTxn) => {
+  const { hour, minute } = ist(t.datetime);
+  return `${hour % 12 || 12}:${String(minute).padStart(2, "0")}${hour < 12 ? "am" : "pm"}`;
+};
 const FOOD = ["Food", "Food & Dining"];
 const RENT = ["Rent/PG", "Rent"];
 const INCOME_CATS = ["Salary", "Salary/Stipend", "Other income", "Other Income", "Scholarship", "Sold something"];
@@ -434,7 +440,8 @@ export const TEMPLATES: EventTemplate[] = [
     fire: (c) => {
       const t = biggest(inCats(c.weekTxns, "Shopping").filter((x) => x.type === "DR"));
       if (!t || t.amount < over(c, 0.08, 500)) return null;
-      return ev(`Big buy: ${inr(t.amount)}`, `At ${who(c, t)} on ${onDate(c, t)}. That's ${pct(c, t.amount)}% of your month in one tap.`, {
+      const late = isLateNight(t) ? ` at ${clock(t)}` : "";
+      return ev(`Big buy: ${inr(t.amount)}`, `At ${who(c, t)} on ${onDate(c, t)}${late}. That's ${pct(c, t.amount)}% of your month in one tap.`, {
         icon: "shopping-bag", tone: "bad", amount: t.amount, delta: { happiness: 4, stress: 5 }, lesson: "impulse",
       });
     },
@@ -443,8 +450,10 @@ export const TEMPLATES: EventTemplate[] = [
     id: "midnight-cart",
     group: "shopping",
     fire: (c) => {
-      const t = c.weekTxns.find((x) => x.category === "Shopping" && x.type === "DR" && (hourOf(x) >= 23 || hourOf(x) < 4));
-      return t ? ev("Midnight add-to-cart", `${inr(t.amount)} at ${who(c, t)} at ${String(hourOf(t)).padStart(2, "0")}:xx on ${onDate(c, t)}. Late-night shopping is mostly mood.`, { icon: "shopping-bag", tone: "bad", amount: t.amount, delta: { happiness: 2, stress: 4 }, lesson: "impulse" }) : null;
+      // A late-night buy already shown as this week's big buy gets its time mentioned there instead.
+      const shown = c.fired.has(`big-buy-${c.week}`) ? biggest(inCats(c.weekTxns, "Shopping").filter((x) => x.type === "DR")) : undefined;
+      const t = c.weekTxns.find((x) => x !== shown && x.category === "Shopping" && x.type === "DR" && isLateNight(x));
+      return t ? ev("Midnight add-to-cart", `${inr(t.amount)} at ${who(c, t)} at ${clock(t)} on ${onDate(c, t)}. Late-night shopping is mostly mood.`, { icon: "shopping-bag", tone: "bad", amount: t.amount, delta: { happiness: 2, stress: 4 }, lesson: "impulse" }) : null;
     },
   },
   {
