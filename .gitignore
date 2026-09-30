@@ -1,0 +1,13 @@
+# Real bank data - never commit
+*.csv
+transactions.json
+parser/merchant_overrides.json
+statements/
+__pycache__/
+node_modules/
+.env*
+# Parser personal config (your own and family names)
+parser/config.json
+# Local agent/tool skills (not part of the app)
+.agents/
+.claude/skills/

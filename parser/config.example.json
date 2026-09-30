@@ -1,0 +1,5 @@
+{
+  "_comment": "Copy to config.json (git-ignored) and fill in. Names are matched without spaces, case-insensitive, against UPI counterparties (truncated to 15 chars). Use the form your bank shows.",
+  "self_names": ["Your Full Name"],
+  "family_names": ["Parent Name", "Family Surname"]
+}

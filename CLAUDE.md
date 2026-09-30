@@ -1,0 +1,113 @@
+# Money Twin — project brief for Claude Code
+
+## What this is
+BTech (Digital Transformation, 3rd year) project by Anil. It's a web app plus a web game that teaches
+budgeting and personal finance using the user's **real bank statement**.
+
+**USP:** the only finance game where your character's life is shaped by your *actual* spending, and every
+lesson comes from your own mistakes. Existing finance apps (INDmoney, ET Money) use real data but don't teach.
+Life-sim games (BitLife) teach but use fake money.
+
+## Hard rules
+- **No AI/LLM features.** Categorisation and insights come from a plain rules engine.
+- **No personalised trading/investment advice.** That needs SEBI registration. General market news is fine,
+  but never "buy/sell" suggestions.
+- **Privacy:** never store bank passwords, delete raw statements after parsing, and never commit real statement
+  files or `transactions.json` to git (see .gitignore).
+- **No custom art.** Use DiceBear avatars, Lucide/Twemoji icons, and cards/stat bars in React.
+
+## Core features (build in this order)
+1. **Statement parsing.** Kotak CSV works (`parser/kotak_parser.py`). PDF and other banks come later.
+2. **"Teach your Money Twin" onboarding.** On real data, about 37% of spending goes to UPI payees with
+   person names (local shops, PGs, friends) that no rule can categorise. But the top ~20 payees cover
+   ~80% of that unknown spending. So onboarding asks the user to label their top 15–20 unknown payees
+   ("Who is Manjunath S? Food / Rent / Friend…"). Answers are saved as merchant overrides.
+   The user also tags family members here (don't hardcode surnames).
+3. **"Where your money goes" dashboard:** category totals, month-on-month trend, top payees.
+4. **Alerts:** category overspend, unusually large transactions, recurring subscriptions.
+5. **Goals:** "₹X by date", time-to-goal, and which expenses to cut to get there faster.
+6. **Game layer ("Money Twin"):**
+   - Create a character (student / first job / working professional), name, city, and a DiceBear avatar.
+   - Stats: Savings, Happiness, Stress, Goal Progress.
+   - Real spending triggers life events ("18 Swiggy orders → skipped gym, Health −10").
+   - Each month is a new chapter in the character's life, with a report card at the end.
+   - **Lessons triggered by behaviour:** 50/30/20 rule, emergency fund, EMI/BNPL trap, compounding, inflation.
+   - "Replay your month" with different choices; "Future you" projection for 5/10/20 years.
+   - India-specific scenarios: UPI micro-spends, festivals, first salary, hostel life.
+7. **Next-month budget planner.**
+8. **Bonus:** Account Aggregator sandbox (Setu/Finvu) for consent-based bank data, with no uploads.
+
+## Game flow (how a new user starts)
+Don't ask for a bank statement first; users won't trust a new app with money data yet. Let them play, then ask.
+1. **Landing:** one line ("Meet the version of you that lives on your real spending") and one button, "Create your twin".
+2. **Create character (no data needed):** type (student / first job / working professional), name, city,
+   DiceBear avatar. The character appears with full stat bars.
+3. **Demo month:** the twin lives through one month using a **sample persona** (e.g. hostel student,
+   ₹8,000/month). Event cards pop up, stats move, and it ends with a report card. This is the hook.
+4. **"Bring your twin to life" → upload statement.** Show a privacy screen first. **Parse the CSV in the
+   browser**; the raw file is never uploaded or stored. Only categorised transactions are kept.
+5. **Teach your twin:** swipe cards for the top 15–20 unknown payees ("Manjunath S, ₹12,000:
+   Food / Rent / Friend / Family?"). Also tag family members here.
+6. **Replay your real past:** the twin lives through the last 6 months as chapters (one per month) with real
+   events and report cards. Then the user sets a goal.
+7. **Ongoing:** each new monthly statement is a new chapter (Account Aggregator can replace uploads later).
+- Always keep a **"play without upload" mode** with sample personas, for users who won't upload and for examiners.
+
+## Design
+- **Look:** dark, cozy, game-like. It should feel like a mobile game, not a banking app. Deep navy/charcoal
+  background, one bright accent for money and one warm colour for alerts, big rounded cards, large numbers,
+  the character always centred. **Mobile-first.**
+- **Use the taste skill** (already installed in Claude Code) for every UI task to avoid generic AI-looking design.
+- **Components:** Tailwind + shadcn/ui; pull cards, bento grids, progress bars and toasts from 21st.dev
+  (shadcn-compatible) instead of mixing styles from many sources.
+- **Motion:** GSAP (`@gsap/react`, `useGSAP`) everywhere but subtle: stat bars filling, numbers counting up,
+  event cards sliding in, chapter transitions. Lenis smooth scroll on the landing page only.
+- **3D (react-three-fiber / ThreeUI-style WebGL): ONLY** on the landing hero and milestone celebrations
+  (goal reached, level up). Never on the dashboard; it hurts readability and speed on cheap phones.
+- Charts: Recharts, styled to match the theme.
+- Inspiration: threeui.com, 21st.dev, tasteskill.dev, demos.gsap.com. Pick one coherent style; don't copy all of them.
+
+## Tech stack
+- Next.js (React, TypeScript) frontend
+- Backend: Next.js API routes (no separate server)
+- Database: **MongoDB** via Mongoose. Atlas free tier for deployment, local MongoDB for dev.
+  Connection string in `.env.local` as `MONGODB_URI` (never commit it). Developer inspects data with MongoDB Compass.
+- Auth: Auth.js (NextAuth) with Google sign-in
+- Suggested collections: `users`, `characters` (stats, level, type), `transactions` (categorised only, never raw
+  files), `merchantOverrides` (per-user payee → category), `chapters` (monthly events + report card), `goals`
+- API testing: Postman. When you add or change an API route, also update `postman/money-twin.postman_collection.json`
+  so every endpoint can be tested there.
+- Python parser service (current: `parser/kotak_parser.py`; pdfplumber for PDFs later), or port it to TypeScript
+- Game UI in React first; Phaser/PixiJS only if needed later
+- Tailwind + shadcn/ui, GSAP, react-three-fiber (hero/celebrations only), Lenis, Recharts, DiceBear
+- The statement parser must also run **in the browser** (port `kotak_parser.py` logic to TypeScript) for privacy
+
+## Kotak CSV notes
+- Header row starts with `Sl. No.`; data rows have a numeric first column; the footer has bank notes, so skip those.
+- Columns: Sl No, Transaction Date (`dd-mm-yyyy HH:MM`), Value Date, Description, Chq/Ref No, Amount,
+  Dr/Cr, Balance, Dr/Cr.
+- Amounts have commas ("2,500.00"). Ref numbers are sometimes mangled by Excel (`5.10715E+11`),
+  so dedupe on (datetime, description, amount, type, balance), not on ref.
+- Description prefixes: `UPI/<name>/…`, `REV-UPI` (refund), `PCD/<card>/<merchant>` (card purchase),
+  `ATL` (ATM), `811:BD` (bill pay), `CASHBACK EARNED`, `811 SUPER CASHBACK`, `Int.Pd` (interest),
+  `Cash Deposit`, `Ac xfr from gl` (internal, ignore).
+- UPI names are truncated to 15 characters.
+
+## Current status
+- [x] Kotak CSV parser + rules categoriser with confidence levels (high / medium / low / user)
+- [x] Landing page + character creation (`web/`, 3D coin hero with low-end/reduced-motion fallback)
+- [x] Demo month loop: Plan (envelope budget) → Live (4 weeks, 1 decision/week) → Review (plan vs actual report)
+      → Learn (interactive skill cards, XP, Money Skills book at `/skills`) → Play better (abilities in September).
+      Personas per life stage (student / first job / professional) × city in `web/src/game/personas/`;
+      Months carry over (closing balance becomes next opening balance, debt repaid first, mood continues,
+      plan suggested halfway from last month's spending toward 50/30/20);
+      lessons use the player's own numbers. Engine in `web/src/game/engine.ts`; tests via `npm test`
+- [ ] In-browser statement upload + privacy screen (TypeScript port of the parser)
+- [ ] Teach-your-twin swipe cards
+- [ ] Replay last 6 months as chapters + dashboard
+- [ ] Goals, alerts, lessons, budget planner
+- [ ] Account Aggregator sandbox (bonus)
+
+## Working rules for Claude Code
+- One feature per session; build it with sample data first, then real data.
+- After a feature works, tick it off in "Current status" above.
