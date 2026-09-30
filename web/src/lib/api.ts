@@ -92,8 +92,19 @@ export const saveOverridesBody = z
   .strict();
 
 const isoish = z.string().max(40);
+const pct = z.number().min(0).max(100);
+const monthResult = z
+  .object({
+    grade: z.enum(["A", "B", "C", "D"]),
+    score: pct,
+    savingsKept: z.number().min(-1e9).max(1e9),
+    stats: z.object({ savings: pct, happiness: pct, stress: pct, goal: pct }).strict(),
+    plan: z.object({ needs: pct, wants: pct, savings: pct, emergency: pct.optional() }).strict(),
+    playedAt: isoish,
+  })
+  .strict();
 
-/** The twin as the browser stores it (see src/game/character.ts and src/game/skills.ts). */
+/** The twin as the browser stores it (see src/game/character.ts, skills.ts and replay-progress.ts). */
 export const twinBody = z
   .object({
     character: z
@@ -126,6 +137,16 @@ export const twinBody = z
           .strict()
           .optional(),
         updatedAt: isoish.default(""),
+      })
+      .strict()
+      .nullable()
+      .optional(),
+    replay: z
+      .object({
+        months: z
+          .record(z.string().regex(/^\d{4}-\d{2}$/), monthResult)
+          .refine((m) => Object.keys(m).length <= 240, "Too many months"),
+        updatedAt: isoish.optional(),
       })
       .strict()
       .nullable()

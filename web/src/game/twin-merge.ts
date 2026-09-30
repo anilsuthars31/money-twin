@@ -1,4 +1,5 @@
 import { DEFAULT_CONTEXT, XP_CORRECT, XP_TRIED } from "./lessons";
+import { mergeReplay, type ReplayProgress } from "./replay-progress";
 import type { SkillBook } from "./skills";
 import type { Character } from "./types";
 
@@ -7,10 +8,12 @@ import type { Character } from "./types";
 // - Skills: learned lessons are combined (earliest date kept), and XP is recalculated from them,
 //   so playing on two devices never loses a lesson or double-counts XP.
 // - Lesson numbers (context): from whichever skill book changed last.
+// - Replayed months: every month played on either side, the latest result for each.
 
 export interface TwinCopy {
   character: Character | null;
   skills: SkillBook | null;
+  replay?: ReplayProgress | null;
 }
 
 const stamp = (s?: string) => (s ? Date.parse(s) || 0 : 0);
@@ -47,10 +50,9 @@ export function mergeTwin(local: TwinCopy, account: TwinCopy) {
         : account.character
       : (local.character ?? account.character);
   const skills = mergeSkills(local.skills, account.skills);
-  const merged: TwinCopy = { character, skills };
-  return {
-    merged,
-    updateLocal: !same(merged.character, local.character) || !same(merged.skills, local.skills),
-    updateAccount: !same(merged.character, account.character) || !same(merged.skills, account.skills),
-  };
+  const replay = mergeReplay(local.replay ?? null, account.replay ?? null);
+  const merged: TwinCopy = { character, skills, replay };
+  const differs = (side: TwinCopy) =>
+    !same(merged.character, side.character) || !same(merged.skills, side.skills) || !same(merged.replay, side.replay);
+  return { merged, updateLocal: differs(local), updateAccount: differs(account) };
 }

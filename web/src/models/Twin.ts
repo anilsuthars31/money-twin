@@ -2,7 +2,8 @@ import { Schema, Types, model, models, type InferSchemaType, type Model } from "
 import { resetModelInDev } from "@/lib/model";
 
 // The player's twin in their account, so it follows them across devices: the character they made,
-// and their Money Skills book (XP, learned lessons, and the numbers lessons use). One per user.
+// their Money Skills book (XP, learned lessons, and the numbers lessons use), and the grades of the
+// real months they've replayed (results only, never transactions). One per user.
 // Playing without an account keeps a copy in the browser only.
 const twinSchema = new Schema(
   {
@@ -30,6 +31,16 @@ const twinSchema = new Schema(
           updatedAt: { type: String, default: "" },
         },
         { _id: false },
+      ),
+      default: undefined,
+    },
+    replay: {
+      type: new Schema(
+        {
+          months: { type: Schema.Types.Mixed, default: {} }, // "2026-08" → { grade, score, savingsKept, stats, plan, playedAt }
+          updatedAt: { type: String, default: "" },
+        },
+        { _id: false, minimize: false },
       ),
       default: undefined,
     },

@@ -23,7 +23,7 @@ describe("merging the twin across devices", () => {
   test("a new device gets the account's twin", () => {
     const account = { character: char("Kavya", "2026-09-10T10:00:00Z"), skills: book({}, "2026-09-10T10:00:00Z") };
     const r = mergeTwin({ character: null, skills: null }, account);
-    expect(r.merged).toEqual(account);
+    expect(r.merged).toEqual({ ...account, replay: null });
     expect(r.updateLocal).toBe(true);
     expect(r.updateAccount).toBe(false);
   });

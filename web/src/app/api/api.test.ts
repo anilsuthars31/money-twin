@@ -321,6 +321,24 @@ describe.skipIf(!mongoUp)("API routes (local MongoDB)", () => {
     expect(again.character.name).toBe("Kavya R");
     expect(again.skills.xp).toBe(40);
     expect((await (await me.GET()).json()).twin).toBe(true);
+
+    // Replayed months: results only, never transactions.
+    const result = {
+      grade: "B",
+      score: 74,
+      savingsKept: 3200,
+      stats: { savings: 40, happiness: 62, stress: 35, goal: 100 },
+      plan: { needs: 50, wants: 30, savings: 20, emergency: 0 },
+      playedAt: "2026-09-12T10:00:00Z",
+    };
+    const replay = { months: { "2026-08": result }, updatedAt: "2026-09-12T10:00:00Z" };
+    expect((await twinRoute.PUT(req("/api/twin", "PUT", { replay }))).status).toBe(200);
+    const withReplay = (await (await twinRoute.GET()).json()).twin;
+    expect(withReplay.replay).toEqual(replay);
+    expect(withReplay.character.name).toBe("Kavya R");
+    const withTxns = { months: { "2026-08": { ...result, txns: [] } } };
+    expect((await twinRoute.PUT(req("/api/twin", "PUT", { replay: withTxns }))).status).toBe(400);
+    expect((await twinRoute.PUT(req("/api/twin", "PUT", { replay: { months: { august: result } } }))).status).toBe(400);
   });
 
   test("the twin API rejects bad input and keeps twins per user", async () => {
