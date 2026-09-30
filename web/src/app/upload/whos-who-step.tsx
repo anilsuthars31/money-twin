@@ -3,14 +3,29 @@
 import { useState } from "react";
 import { ArrowRight, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { TEACH_CATEGORIES, type TeachCategory } from "@/lib/categories";
+import { INCOME_CATEGORIES, TEACH_CATEGORIES, type FriendMode } from "@/lib/categories";
 import type { PersonCandidate } from "@/lib/statement";
 import { cn } from "@/lib/utils";
 
-/** What the player says about a person. "Other" always comes with a nickname and a category. */
+/**
+ * What the player says about a person. "Other" always comes with a nickname and a category;
+ * "Friend" with whether money sent to them was lending or their share of things done together.
+ */
 export type PersonTag =
-  | { kind: "Family" | "Self" | "Friend" }
-  | { kind: "Other"; nickname: string; category: TeachCategory };
+  | { kind: "Family" | "Self" }
+  | { kind: "Friend"; mode?: FriendMode }
+  | { kind: "Other"; nickname: string; category: string };
+
+/** The friend mode to save for a tag (if it's a friend). */
+export const tagMode = (t: PersonTag): FriendMode | undefined => (t.kind === "Friend" ? (t.mode ?? "lend") : undefined);
+
+/** A Friend you've sent money to must say whether it was lending or your share. */
+export const needsFriendMode = (p: PersonCandidate, t: PersonTag | null) => t?.kind === "Friend" && p.sent > 0 && !t.mode;
+
+const FRIEND_MODE_OPTIONS: { mode: FriendMode; label: string }[] = [
+  { mode: "lend", label: "Lending to them" },
+  { mode: "share", label: "My share of things we did together" },
+];
 
 /** The label saved for a tag: Family / Self / Friend, or the category chosen for "Other". */
 export const tagCategory = (t: PersonTag): string => (t.kind === "Other" ? t.category : t.kind);
@@ -23,7 +38,10 @@ const OPTIONS: { kind: PersonTag["kind"]; label: string }[] = [
 ];
 
 /** Categories for "Other": the specific ones (people-type labels are the options above). */
-export const OTHER_CATEGORIES = TEACH_CATEGORIES.filter((c) => !["Family", "Friend", "Other"].includes(c));
+export const OTHER_CATEGORIES: string[] = TEACH_CATEGORIES.filter((c) => !["Family", "Friend", "Other"].includes(c));
+
+/** Someone who mostly pays *you* gets income reasons instead of spending categories. */
+const paysYou = (p: PersonCandidate) => p.received > p.sent;
 
 const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 
@@ -34,12 +52,16 @@ function OtherForm({
   onCancel,
 }: {
   person: PersonCandidate;
-  initial?: { nickname: string; category: TeachCategory };
-  onSave: (nickname: string, category: TeachCategory) => void;
+  initial?: { nickname: string; category: string };
+  onSave: (nickname: string, category: string) => void;
   onCancel: () => void;
 }) {
   const [nickname, setNickname] = useState(initial?.nickname ?? "");
-  const [category, setCategory] = useState<TeachCategory | null>(initial?.category ?? null);
+  const income = paysYou(person);
+  const choices = income ? [...INCOME_CATEGORIES] : OTHER_CATEGORIES;
+  const [category, setCategory] = useState<string | null>(
+    initial && choices.includes(initial.category) ? initial.category : null,
+  );
   const [tried, setTried] = useState(false);
   const name = nickname.trim();
   const id = `other-${person.key}`;
@@ -70,9 +92,9 @@ function OtherForm({
         {tried && !name && <p className="mt-1 text-xs text-alert">Give them a name you&apos;ll recognise.</p>}
       </div>
       <fieldset>
-        <legend className="text-sm font-medium">What do you pay them for?</legend>
-        <div className="mt-1.5 flex flex-wrap gap-1.5" role="radiogroup" aria-label="Category">
-          {OTHER_CATEGORIES.map((c) => (
+        <legend className="text-sm font-medium">{income ? "Why do they pay you?" : "What do you pay them for?"}</legend>
+        <div className="mt-1.5 flex flex-wrap gap-1.5" role="radiogroup" aria-label={income ? "Why they pay you" : "Category"}>
+          {choices.map((c) => (
             <button
               key={c}
               type="button"
@@ -119,6 +141,7 @@ export function WhosWhoStep({
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const unmarked = people.filter((p) => !tags[p.key]).length;
+  const friendQuestionOpen = people.some((p) => needsFriendMode(p, tags[p.key] ?? null));
 
   return (
     <div className="space-y-3">
@@ -179,6 +202,36 @@ export function WhosWhoStep({
                   })}
                 </div>
 
+                {tag?.kind === "Friend" && p.sent > 0 && (
+                  <fieldset className="mt-3 rounded-2xl bg-white/[0.04] p-3">
+                    <legend className="px-1 text-sm font-medium">Money you sent them was mostly:</legend>
+                    <div className="mt-1.5 grid gap-1.5" role="radiogroup" aria-label={`Money you sent ${p.counterparty} was mostly`}>
+                      {FRIEND_MODE_OPTIONS.map((o) => (
+                        <button
+                          key={o.mode}
+                          type="button"
+                          role="radio"
+                          aria-checked={tag.mode === o.mode}
+                          onClick={() => onTag(p.key, { kind: "Friend", mode: o.mode })}
+                          className={cn(
+                            "min-h-10 rounded-xl px-3 text-left text-sm font-medium ring-1 transition",
+                            tag.mode === o.mode ? "bg-money/15 text-money ring-money/60" : "bg-white/[0.03] ring-white/10 hover:bg-white/[0.07]",
+                          )}
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-2 px-1 text-xs text-muted-foreground">
+                      {tag.mode === "share"
+                        ? "What you paid counts as your own spending (food, outings)."
+                        : tag.mode === "lend"
+                          ? "What you sent counts as money they owe you."
+                          : "Only lending counts as money they owe you."}
+                    </p>
+                  </fieldset>
+                )}
+
                 {tag?.kind === "Other" && !isEditing && (
                   <button
                     type="button"
@@ -205,9 +258,12 @@ export function WhosWhoStep({
         </ul>
       )}
 
-      <Button size="xl" className="w-full" onClick={onContinue} disabled={editing !== null}>
+      <Button size="xl" className="w-full" onClick={onContinue} disabled={editing !== null || friendQuestionOpen}>
         Next: who are the rest? <ArrowRight data-icon="inline-end" />
       </Button>
+      {friendQuestionOpen && (
+        <p className="text-center text-xs text-muted-foreground">Answer how you sent money to each friend first.</p>
+      )}
       {unmarked > 0 && (
         <p className="text-center text-xs text-muted-foreground">
           {unmarked} {unmarked === 1 ? "person" : "people"} not marked here will come up in the next cards.

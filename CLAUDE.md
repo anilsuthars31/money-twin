@@ -129,7 +129,11 @@ Don't ask for a bank statement first; users won't trust a new app with money dat
 - [x] Teach-your-twin: "Who's who?" (Family · Me (my other account) · Friend · Other, no surname rules; Other needs a
       nickname + category), swipe cards (unmarked people first, then top 20 unknown payees; 6 likeliest categories +
       "More"; optional nickname with quick chips), understanding meter. Labels + nicknames saved as merchant overrides.
-      Friend transfers are splits/loans: not income or spending, netted per friend (`friendBalances`).
+      Friend asks once "Money you sent them was mostly: Lending to them / My share of things we did together"
+      (`friendMode`): only lending counts toward "owes you"; "my share" payments count as spending (Food for small
+      lunch/dinner payments, else Entertainment). Money from friends is never income. Who's who includes anyone with
+      money going both ways. "Other" for someone who mostly pays you asks "Why do they pay you?" with income reasons
+      (Salary/Stipend, Scholarship, Refund, Sold something, Other income).
 - [x] Twin in the account: `twins` collection + `/api/twin`; `TwinSync` merges browser and account copies
       (newest character, union of learned lessons, XP recalculated). Browser-only when signed out.
       Home page shows saved transactions ("51 transactions saved, Jul–Aug 2026").

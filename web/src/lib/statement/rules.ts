@@ -1,4 +1,4 @@
-import { categoryForLabel, payeeKey } from "@/lib/categories";
+import { categoryForLabel, payeeKey, type FriendMode } from "@/lib/categories";
 import type { StatementRow } from "./kotak";
 
 // Plain-rules categoriser (port of parser/kotak_parser.py). No AI. Differences from the Python
@@ -25,8 +25,11 @@ export interface Categorised {
   fingerprint: string;
 }
 
-/** Payee labels the player taught: payeeKey → category ("Food", "Family", "Self", …). */
+/** Payee labels the player taught: payeeKey → category ("Food", "Family", "Self", "Friend", …). */
 export type Labels = Record<string, string>;
+
+/** For payees labelled Friend: whether money sent to them was lending or your share. */
+export type FriendModes = Record<string, FriendMode>;
 
 // (category, keywords), checked in order; first match wins.
 const MERCHANT_RULES: [string, string[]][] = [
@@ -103,11 +106,13 @@ export function ruleCategory(r: StatementRow): { category: string; confidence: E
 }
 
 /** The player's label wins; money to/from "Self" or "Family" gets the direction-specific category. */
-export function applyLabel(t: Categorised, labels: Labels): Categorised {
-  const label = labels[payeeKey(t.counterparty)];
+export function applyLabel(t: Categorised, labels: Labels, modes: FriendModes = {}): Categorised {
+  const key = payeeKey(t.counterparty);
+  const label = labels[key];
   if (!label) return { ...t, category: t.ruleCategory, confidence: t.ruleConfidence };
   if (t.ruleCategory === "Internal (ignore)") return t;
-  return { ...t, category: categoryForLabel(label, t.type), confidence: "user" };
+  return { ...t, category: categoryForLabel(label, t, modes[key]), confidence: "user" };
 }
 
-export const applyLabels = (txns: Categorised[], labels: Labels) => txns.map((t) => applyLabel(t, labels));
+export const applyLabels = (txns: Categorised[], labels: Labels, modes: FriendModes = {}) =>
+  txns.map((t) => applyLabel(t, labels, modes));

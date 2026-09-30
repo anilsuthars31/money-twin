@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { handle, requireUserId, saveOverridesBody } from "@/lib/api";
-import { categoryForLabel, payeeKey } from "@/lib/categories";
+import { categoryForLabel, payeeKey, type FriendMode } from "@/lib/categories";
 import { MerchantOverride } from "@/models/MerchantOverride";
 import { Transaction } from "@/models/Transaction";
 
@@ -14,6 +14,7 @@ export const GET = handle(async () => {
       counterparty: o.counterparty,
       category: o.category,
       ...(o.nickname && { nickname: o.nickname }),
+      ...(o.friendMode && { friendMode: o.friendMode }),
       updatedAt: o.updatedAt,
     })),
   });
@@ -29,12 +30,14 @@ export const PUT = handle(async (req: NextRequest) => {
   const userId = await requireUserId();
   const { overrides } = saveOverridesBody.parse(await req.json());
   const saved = await MerchantOverride.bulkWrite(
-    overrides.map(({ counterparty, category, nickname }) => ({
+    overrides.map(({ counterparty, category, nickname, friendMode }) => ({
       updateOne: {
         filter: { userId, key: payeeKey(counterparty) },
         update: {
-          $set: { counterparty, category, ...(nickname && { nickname }) },
-          ...(nickname === null && { $unset: { nickname: "" } }),
+          $set: { counterparty, category, ...(nickname && { nickname }), ...(friendMode && { friendMode: friendMode as FriendMode }) },
+          ...((nickname === null || (category !== "Friend" && !friendMode)) && {
+            $unset: { ...(nickname === null && { nickname: "" }), ...(category !== "Friend" && { friendMode: "" }) },
+          }),
           $setOnInsert: { userId, key: payeeKey(counterparty) },
         },
         upsert: true,
@@ -42,18 +45,30 @@ export const PUT = handle(async (req: NextRequest) => {
     })),
     { ordered: false },
   );
-  // Same mapping as the browser: "Family" becomes Family Support (in) or Sent to Family (out), "Self" a transfer.
-  const relabel = await Transaction.bulkWrite(
-    overrides.flatMap(({ counterparty, category }) =>
-      (["DR", "CR"] as const).map((type) => ({
-        updateMany: {
-          filter: { userId, payeeKey: payeeKey(counterparty), type },
-          update: { $set: { category: categoryForLabel(category, type), confidence: "user" } },
-        },
-      })),
-    ),
-    { ordered: false },
+  // Re-label saved transactions with the same rule the browser uses (categoryForLabel): Family by
+  // direction, Self as a transfer, Friend as a loan unless it's "my share" (then food or outings).
+  const keys = overrides.map((o) => payeeKey(o.counterparty));
+  const labels = new Map(
+    (await MerchantOverride.find({ userId, key: { $in: keys } }).lean()).map((o) => [
+      o.key,
+      { category: o.category, mode: (o.friendMode ?? undefined) as FriendMode | undefined },
+    ]),
   );
+  const affected = await Transaction.find({ userId, payeeKey: { $in: keys } }, { type: 1, amount: 1, datetime: 1, payeeKey: 1 }).lean();
+  const relabel = affected.length
+    ? await Transaction.bulkWrite(
+        affected.map((t) => {
+          const label = labels.get(t.payeeKey)!;
+          return {
+            updateOne: {
+              filter: { _id: t._id },
+              update: { $set: { category: categoryForLabel(label.category, t as never, label.mode), confidence: "user" } },
+            },
+          };
+        }),
+        { ordered: false },
+      )
+    : { modifiedCount: 0 };
   return NextResponse.json({
     saved: saved.upsertedCount + saved.modifiedCount,
     relabelledTransactions: relabel.modifiedCount,

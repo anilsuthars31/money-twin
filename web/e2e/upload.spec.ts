@@ -74,6 +74,8 @@ test("sample statement: read on the device, taught, saved, and the raw file is n
   // Family: mark the parent who sends pocket money.
   await page.getByRole("radio", { name: "Ramesh Kumar: Family" }).click();
   await page.getByRole("radio", { name: "Sunita Devi: Family" }).click(); // unmarked people would come first in the cards
+  await page.getByRole("radio", { name: "Arjun P: Friend" }).click();
+  await page.getByRole("radio", { name: "Lending to them" }).click();
   await page.getByRole("button", { name: /who are the rest/ }).click();
 
   // Cards: six category buttons, the rest under "More".
@@ -106,6 +108,7 @@ test("sample statement: read on the device, taught, saved, and the raw file is n
   expect(saved.transactions.find((t: { counterparty: string }) => t.counterparty === "Shanthi Pg").category).toBe("Rent/PG");
   const labels = (await (await page.request.get("/api/overrides")).json()).overrides;
   expect(labels.map((l: { counterparty: string; category: string }) => `${l.counterparty}:${l.category}`).sort()).toEqual([
+    "Arjun P:Friend",
     "Ramesh Kumar:Family",
     "Shanthi Pg:Rent/PG",
     "Sunita Devi:Family",
@@ -116,7 +119,7 @@ test("sample statement: read on the device, taught, saved, and the raw file is n
   await page.getByLabel(/I understand/).check();
   await page.getByRole("button", { name: /Choose statement/ }).click();
   await page.locator("#statement-files").setInputFiles(SAMPLE_PATH);
-  await expect(page.getByText("3 payees you taught before")).toBeVisible();
+  await expect(page.getByText("4 payees you taught before")).toBeVisible();
   await page.getByRole("button", { name: "Skip teaching for now" }).click();
   await page.getByRole("button", { name: "Save to my account" }).click();
   await expect(page.getByText("0 new transactions saved (51 were already there)")).toBeVisible();
@@ -131,6 +134,8 @@ test("signed out: asks to sign in right before saving, then carries on", async (
   await page.getByRole("button", { name: /Teach your twin/ }).click();
   await page.getByRole("radio", { name: "Ramesh Kumar: Family" }).click();
   await page.getByRole("radio", { name: "Sunita Devi: Family" }).click(); // unmarked people would come first in the cards
+  await page.getByRole("radio", { name: "Arjun P: Friend" }).click();
+  await page.getByRole("radio", { name: "Lending to them" }).click();
   await page.getByRole("button", { name: /who are the rest/ }).click();
   await page.getByRole("button", { name: "Shanthi Pg is Rent/PG (likely)" }).click();
   await page.getByRole("button", { name: "Finish later and review" }).click();
@@ -154,7 +159,7 @@ test("signed out: asks to sign in right before saving, then carries on", async (
   expect(await page.evaluate(() => sessionStorage.getItem("money-twin:pending-upload"))).toBeNull();
 
   const labels = (await (await page.request.get("/api/overrides")).json()).overrides;
-  expect(labels).toHaveLength(3); // the answers given before signing in survived
+  expect(labels).toHaveLength(4); // the answers given before signing in survived
   await page.request.delete("/api/me");
 });
 
@@ -184,8 +189,13 @@ test.describe("real statements (local only)", () => {
     if (await page.getByRole("button", { name: /who are the rest/ }).isVisible()) {
       await page.getByRole("button", { name: /who are the rest/ }).click();
     }
-    // Answer five cards with their "Likely" category.
-    for (let i = 0; i < 5; i++) await page.getByRole("button", { name: /\(likely\)$/ }).click();
+    // Answer five cards with their "Likely" category (and, for friends, the lending-or-share question).
+    for (let i = 0; i < 5; i++) {
+      await page.getByRole("button", { name: /\(likely\)$/ }).click();
+      const lend = page.getByRole("radio", { name: /Lending to them/ });
+      if (await lend.isVisible()) await lend.click();
+      await page.waitForTimeout(250);
+    }
     await page.getByRole("button", { name: "Finish later and review" }).click();
     await page.getByRole("button", { name: "Save to my account" }).click();
     await expect(page.getByRole("heading", { name: "Your twin knows your real months" })).toBeVisible({ timeout: 30_000 });

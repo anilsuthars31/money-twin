@@ -19,7 +19,7 @@ import {
   Utensils,
   type LucideIcon,
 } from "lucide-react";
-import type { TeachCategory } from "@/lib/categories";
+import type { FriendMode, TeachCategory } from "@/lib/categories";
 import type { PayeeCard } from "@/lib/statement";
 import { cn } from "@/lib/utils";
 import { UnderstandingMeter } from "./understanding-meter";
@@ -43,8 +43,8 @@ const ICON: Record<TeachCategory, LucideIcon> = {
 const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 const SWIPE = 90; // px to count as a swipe
 
-/** One answer: the category (null = skipped) and an optional nickname ("Gym trainer"). */
-export type Decision = { key: string; category: TeachCategory | null; nickname?: string };
+/** One answer: the category (null = skipped), an optional nickname, and for friends, lending or share. */
+export type Decision = { key: string; category: TeachCategory | null; nickname?: string; friendMode?: FriendMode };
 
 /**
  * One payee at a time: who they are in numbers, and six likely categories (the rest under "More").
@@ -75,23 +75,32 @@ export function TeachCards({
   const [more, setMore] = useState(false);
   const [naming, setNaming] = useState(false);
   const [nickname, setNickname] = useState("");
+  const [askFriend, setAskFriend] = useState(false); // "Money you sent them was mostly…"
   const [dx, setDx] = useState(0);
   const [leaving, setLeaving] = useState<"left" | "right" | null>(null);
   const drag = useRef<{ x: number; id: number } | null>(null);
   const [dragging, setDragging] = useState(false);
 
   const decide = useCallback(
-    (category: TeachCategory | null) => {
+    (category: TeachCategory | null, friendMode?: FriendMode) => {
       if (!card || leaving) return;
+      // Friends you've paid: ask once whether that was lending or your share before recording it.
+      if (category === "Friend" && card.total > 0 && !friendMode) return setAskFriend(true);
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const name = nickname.trim().slice(0, 40);
       const commit = () => {
-        onDecide({ key: card.key, category, ...(category && name && { nickname: name }) });
+        onDecide({
+          key: card.key,
+          category,
+          ...(category && name && { nickname: name }),
+          ...(category === "Friend" && { friendMode: friendMode ?? "lend" }),
+        });
         setLeaving(null);
         setDx(0);
         setMore(false);
         setNaming(false);
         setNickname("");
+        setAskFriend(false);
       };
       if (reduce) return commit();
       setLeaving(category ? "right" : "left");
@@ -103,7 +112,7 @@ export function TeachCards({
   // Keyboard: 1–6 pick, → likely, ← or S skip, Backspace undo.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!card || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (!card || askFriend || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const n = Number(e.key);
       if (n >= 1 && n <= 6) decide(card.suggestions[n - 1]);
       else if (e.key === "ArrowRight") decide(card.suggestions[0]);
@@ -114,7 +123,7 @@ export function TeachCards({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [card, decide, index, leaving, onUndo]);
+  }, [askFriend, card, decide, index, leaving, onUndo]);
 
   if (!card) {
     return (
@@ -267,7 +276,37 @@ export function TeachCards({
           </button>
         )}
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        {askFriend && (
+          <fieldset className="mt-4 rounded-2xl bg-money/10 p-3 ring-1 ring-money/30">
+            <legend className="px-1 text-sm font-semibold">Money you sent them was mostly:</legend>
+            <div className="mt-1.5 grid gap-1.5" role="radiogroup" aria-label={`Money you sent ${card.counterparty} was mostly`}>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={false}
+                onClick={() => decide("Friend", "lend")}
+                className="min-h-11 rounded-xl bg-raised px-3 text-left text-sm font-semibold ring-1 ring-white/10 hover:bg-white/10"
+              >
+                Lending to them <span className="block text-xs font-normal text-muted-foreground">They owe it back</span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={false}
+                onClick={() => decide("Friend", "share")}
+                className="min-h-11 rounded-xl bg-raised px-3 text-left text-sm font-semibold ring-1 ring-white/10 hover:bg-white/10"
+              >
+                My share of things we did together
+                <span className="block text-xs font-normal text-muted-foreground">Counts as your spending (food, outings)</span>
+              </button>
+            </div>
+            <button type="button" onClick={() => setAskFriend(false)} className="mt-2 px-1 text-xs text-muted-foreground underline-offset-4 hover:underline">
+              Not a friend after all
+            </button>
+          </fieldset>
+        )}
+
+        <div className={cn("mt-4 grid grid-cols-2 gap-2", askFriend && "hidden")}>
           {top.map((c, i) => {
             const Icon = ICON[c];
             return (
@@ -289,7 +328,7 @@ export function TeachCards({
           })}
         </div>
 
-        {more ? (
+        {askFriend ? null : more ? (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {rest.map((c) => {
               const Icon = ICON[c];

@@ -233,6 +233,49 @@ describe.skipIf(!mongoUp)("API routes (local MongoDB)", () => {
     expect(list.map((t) => t.category)).toEqual(["Friend", "Friend"]);
   });
 
+  test("friend mode: lending stays a loan, 'my share' becomes spending (by India time and amount)", async () => {
+    await txns.POST(
+      req("/api/transactions", "POST", {
+        transactions: [
+          { ...txn(1, "Arjun P"), amount: 250, datetime: "2026-08-01T20:15:00+05:30" }, // dinner-sized → Food
+          { ...txn(2, "Arjun P"), amount: 900, datetime: "2026-08-02T17:00:00+05:30" }, // outing → Entertainment
+          { ...txn(3, "Arjun P"), type: "CR", amount: 300 }, // money back is never income
+          { ...txn(4, "Neha S"), amount: 500 },
+        ],
+      }),
+    );
+    const res = await overrides.PUT(
+      req("/api/overrides", "PUT", {
+        overrides: [
+          { counterparty: "Arjun P", category: "Friend", friendMode: "share" },
+          { counterparty: "Neha S", category: "Friend", friendMode: "lend" },
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+    const list = (await (await txns.GET(req("/api/transactions"))).json()).transactions as { counterparty: string; amount: number; category: string }[];
+    const cat = (cp: string, amount: number) => list.find((t) => t.counterparty === cp && t.amount === amount)?.category;
+    expect(cat("Arjun P", 250)).toBe("Food");
+    expect(cat("Arjun P", 900)).toBe("Entertainment");
+    expect(cat("Arjun P", 300)).toBe("Friend");
+    expect(cat("Neha S", 500)).toBe("Friend");
+
+    const labels = (await (await overrides.GET()).json()).overrides as { counterparty: string; friendMode?: string }[];
+    expect(Object.fromEntries(labels.map((l) => [l.counterparty, l.friendMode]))).toEqual({ "Arjun P": "share", "Neha S": "lend" });
+
+    // Relabelling someone as not-a-friend drops the friend mode.
+    await overrides.PUT(req("/api/overrides", "PUT", { overrides: [{ counterparty: "Neha S", category: "Food" }] }));
+    const neha = ((await (await overrides.GET()).json()).overrides as { counterparty: string; friendMode?: string }[]).find((l) => l.counterparty === "Neha S");
+    expect(neha).not.toHaveProperty("friendMode");
+    expect((await overrides.PUT(req("/api/overrides", "PUT", { overrides: [{ counterparty: "X", category: "Friend", friendMode: "gift" }] }))).status).toBe(400);
+  });
+
+  test("income reasons are valid labels for people who pay you", async () => {
+    await txns.POST(req("/api/transactions", "POST", { transactions: [{ ...txn(1, "Sunita Devi"), type: "CR", amount: 1500 }] }));
+    const res = await overrides.PUT(req("/api/overrides", "PUT", { overrides: [{ counterparty: "Sunita Devi", category: "Scholarship", nickname: "Scholarship trust" }] }));
+    expect(await res.json()).toEqual({ saved: 1, relabelledTransactions: 1 });
+  });
+
   test("the twin is saved to the account and read back", async () => {
     expect(await (await twinRoute.GET()).json()).toEqual({ twin: null });
     const skills = {

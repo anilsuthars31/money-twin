@@ -441,10 +441,10 @@
                 "overrides"
               ]
             },
-            "description": "Upserts labels and re-labels matching saved transactions (name compared without case or spaces). Family becomes Family Support (money in) or Sent to Family (money out); Self is a transfer; Friend is a split/loan. Optional `nickname` (max 40) is shown instead of the UPI name; omit to keep it, null to remove it.",
+            "description": "Upserts labels and re-labels matching saved transactions (name compared without case or spaces). Family becomes Family Support (money in) or Sent to Family (money out); Self is a transfer; Friend is a split/loan: `friendMode` \"lend\" (they owe it back) or \"share\" (your share of outings, counted as your spending as Food/Entertainment). Income reasons (Salary/Stipend, Scholarship, Refund, Sold something, Other income) are valid categories. Optional `nickname` (max 40) is shown instead of the UPI name; omit to keep it, null to remove it.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"overrides\": [\n    {\n      \"counterparty\": \"Manjunath S\",\n      \"category\": \"Food\",\n      \"nickname\": \"Canteen uncle\"\n    },\n    {\n      \"counterparty\": \"Ramesh Kumar\",\n      \"category\": \"Family\"\n    },\n    {\n      \"counterparty\": \"My Own Name\",\n      \"category\": \"Self\"\n    },\n    {\n      \"counterparty\": \"Arjun P\",\n      \"category\": \"Friend\"\n    }\n  ]\n}",
+              "raw": "{\n  \"overrides\": [\n    {\n      \"counterparty\": \"Manjunath S\",\n      \"category\": \"Food\",\n      \"nickname\": \"Canteen uncle\"\n    },\n    {\n      \"counterparty\": \"Ramesh Kumar\",\n      \"category\": \"Family\"\n    },\n    {\n      \"counterparty\": \"My Own Name\",\n      \"category\": \"Self\"\n    },\n    {\n      \"counterparty\": \"Arjun P\",\n      \"category\": \"Friend\",\n      \"friendMode\": \"lend\"\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"

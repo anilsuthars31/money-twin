@@ -18,10 +18,11 @@ import {
   understoodShare,
   unknownPayees,
   type Categorised,
+  type FriendModes,
   type Labels,
 } from "@/lib/statement";
 import { cn } from "@/lib/utils";
-import { WhosWhoStep, tagCategory, type PersonTag } from "./whos-who-step";
+import { WhosWhoStep, tagCategory, tagMode, type PersonTag } from "./whos-who-step";
 import { PickStep, type PickedFile } from "./pick-step";
 import { PrivacyStep } from "./privacy-step";
 import { TeachCards, type Decision } from "./teach-cards";
@@ -35,6 +36,7 @@ interface Parsed {
   duplicatesRemoved: number;
   existing: Labels; // labels already saved in the account, applied automatically
   existingNicknames: Record<string, string>; // nicknames saved with those labels
+  existingModes: FriendModes; // lending or share, for friends labelled before
 }
 
 // While a signed-out player goes to sign in, the categorised transactions wait in this tab's
@@ -96,13 +98,28 @@ export function UploadFlow({ signedIn, accountName }: { signedIn: boolean; accou
     return out;
   }, [tags, decisions]);
   const nicknames = useMemo(() => ({ ...(parsed?.existingNicknames ?? {}), ...newNicknames }), [parsed, newNicknames]);
-  const friends = useMemo(() => friendBalances(labelledFor(parsed, newLabels), nicknames), [parsed, newLabels, nicknames]);
+
+  /** For friends: was money sent to them lending or their share of outings? */
+  const newModes = useMemo<FriendModes>(() => {
+    const out: FriendModes = {};
+    for (const [key, tag] of Object.entries(tags)) {
+      const mode = tag ? tagMode(tag) : undefined;
+      if (mode) out[key] = mode;
+    }
+    for (const d of decisions) if (d.category === "Friend") out[d.key] = d.friendMode ?? "lend";
+    return out;
+  }, [tags, decisions]);
+  const modes = useMemo(() => ({ ...(parsed?.existingModes ?? {}), ...newModes }), [parsed, newModes]);
+  const friends = useMemo(() => friendBalances(labelledFor(parsed, newLabels, modes), nicknames, modes), [parsed, newLabels, nicknames, modes]);
 
   const labelled = useMemo(
-    () => (parsed ? applyLabels(parsed.transactions, { ...parsed.existing, ...newLabels }) : []),
-    [parsed, newLabels],
+    () => (parsed ? applyLabels(parsed.transactions, { ...parsed.existing, ...newLabels }, modes) : []),
+    [parsed, newLabels, modes],
   );
-  const start = useMemo(() => (parsed ? understoodShare(applyLabels(parsed.transactions, parsed.existing)) : 0), [parsed]);
+  const start = useMemo(
+    () => (parsed ? understoodShare(applyLabels(parsed.transactions, parsed.existing, parsed.existingModes)) : 0),
+    [parsed],
+  );
   const understood = useMemo(() => understoodShare(labelled), [labelled]);
   const summary = useMemo(() => (parsed ? summarise(labelled) : null), [parsed, labelled]);
   const people = useMemo(() => (parsed ? familyCandidates(parsed.transactions).filter((p) => !parsed.existing[p.key]) : []), [parsed]);
@@ -115,12 +132,16 @@ export function UploadFlow({ signedIn, accountName }: { signedIn: boolean; accou
     try {
       let existing: Labels = {};
       let existingNicknames: Record<string, string> = {};
+      let existingModes: FriendModes = {};
       if (signedIn) {
         const res = await fetch("/api/overrides");
         if (res.ok) {
-          const body = (await res.json()) as { overrides: { key: string; category: string; nickname?: string }[] };
+          const body = (await res.json()) as {
+            overrides: { key: string; category: string; nickname?: string; friendMode?: "lend" | "share" }[];
+          };
           existing = Object.fromEntries(body.overrides.map((o) => [o.key, o.category]));
           existingNicknames = Object.fromEntries(body.overrides.filter((o) => o.nickname).map((o) => [o.key, o.nickname!]));
+          existingModes = Object.fromEntries(body.overrides.filter((o) => o.friendMode).map((o) => [o.key, o.friendMode!]));
         }
       }
       const out = await processStatements(files, existing);
@@ -130,6 +151,7 @@ export function UploadFlow({ signedIn, accountName }: { signedIn: boolean; accou
         duplicatesRemoved: out.duplicatesRemoved,
         existing,
         existingNicknames,
+        existingModes,
       });
       setTags({});
       setDecisions([]);
@@ -192,6 +214,7 @@ export function UploadFlow({ signedIn, accountName }: { signedIn: boolean; accou
         counterparty: names.get(key) ?? key,
         category,
         ...(newNicknames[key] && { nickname: newNicknames[key] }),
+        ...(category === "Friend" && { friendMode: modes[key] ?? "lend" }),
       }));
       for (const part of chunk(overrides, 500)) {
         const res = await fetch("/api/overrides", {
@@ -413,8 +436,8 @@ export function UploadFlow({ signedIn, accountName }: { signedIn: boolean; accou
 }
 
 /** Transactions with this session's labels applied (for friend balances). */
-function labelledFor(parsed: Parsed | null, labels: Labels): Categorised[] {
-  return parsed ? applyLabels(parsed.transactions, { ...parsed.existing, ...labels }) : [];
+function labelledFor(parsed: Parsed | null, labels: Labels, modes: FriendModes): Categorised[] {
+  return parsed ? applyLabels(parsed.transactions, { ...parsed.existing, ...labels }, modes) : [];
 }
 
 /** Friends are splits and loans: netted per friend, never counted as income or spending. */
@@ -422,7 +445,9 @@ function FriendsCard({ friends }: { friends: ReturnType<typeof friendBalances> }
   return (
     <section className="rounded-3xl bg-card p-5 ring-1 ring-white/5" aria-label="Money with friends">
       <h3 className="font-semibold">Money with friends</h3>
-      <p className="mt-1 text-xs text-muted-foreground">Splits and loans, not income or spending.</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Money you lent, minus what they paid back. Your share of things you did together counts as your spending instead.
+      </p>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <div className="rounded-2xl bg-white/[0.04] p-3">
           <div className="text-xs text-muted-foreground">Friends owe you</div>

@@ -1,5 +1,5 @@
 import { TEACH_CATEGORIES, payeeKey, type TeachCategory } from "@/lib/categories";
-import { looksLikePerson, type Categorised, type Labels } from "./rules";
+import { looksLikePerson, type Categorised, type FriendModes, type Labels } from "./rules";
 
 // "Teach your twin": which payees to ask about, what to show on each card, and which six
 // categories to offer first. Plain heuristics over the player's own transactions.
@@ -53,14 +53,15 @@ export interface FriendBalance {
 }
 
 /**
- * Money with friends is splits and loans, not income or spending. Per friend: what you paid them
- * minus what they paid you. Positive means they owe you.
+ * Money lent to friends: per friend, what you lent them minus what they paid you. Positive means
+ * they owe you. Friends marked "my share" aren't here: what you paid them is your own spending.
  */
-export function friendBalances(txns: Categorised[], nicknames: Record<string, string> = {}) {
+export function friendBalances(txns: Categorised[], nicknames: Record<string, string> = {}, modes: FriendModes = {}) {
   const byKey = new Map<string, FriendBalance>();
   for (const t of txns) {
     if (t.category !== "Friend") continue;
     const key = payeeKey(t.counterparty);
+    if (modes[key] === "share") continue;
     const b = byKey.get(key) ?? { key, name: nicknames[key] ?? t.counterparty, net: 0 };
     b.net += t.type === "DR" ? t.amount : -t.amount;
     byKey.set(key, b);
@@ -88,10 +89,11 @@ export interface PersonCandidate {
 }
 
 /**
- * People worth asking "family, or you?": person-like names with real money going back and forth
- * (at least 3 payments and ₹3,000, or ₹1,000+ received from them). No surname guessing.
+ * People worth asking "who's who?": person-like names with money going both ways (like a friend you
+ * split with), or real money one way (at least 3 payments and ₹3,000, or ₹1,000+ received from
+ * them). No surname guessing.
  */
-export function familyCandidates(txns: Categorised[], limit = 8): PersonCandidate[] {
+export function familyCandidates(txns: Categorised[], limit = 10): PersonCandidate[] {
   const byKey = new Map<string, PersonCandidate>();
   for (const t of txns) {
     if (t.category === "Internal (ignore)" || !looksLikePerson(t.counterparty)) continue;
@@ -104,7 +106,12 @@ export function familyCandidates(txns: Categorised[], limit = 8): PersonCandidat
     byKey.set(key, c);
   }
   return [...byKey.values()]
-    .filter((c) => (c.count >= 3 && c.sent + c.received >= 3000) || c.received >= 1000)
+    .filter(
+      (c) =>
+        (c.sent > 0 && c.received > 0 && c.sent + c.received >= 500) ||
+        (c.count >= 3 && c.sent + c.received >= 3000) ||
+        c.received >= 1000,
+    )
     .sort((a, b) => b.sent + b.received - (a.sent + a.received))
     .slice(0, limit);
 }

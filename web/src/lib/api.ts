@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { LESSON_ORDER } from "@/game/lessons";
-import { ALL_CATEGORIES } from "@/lib/categories";
+import { ALL_CATEGORIES, FRIEND_MODES } from "@/lib/categories";
 import { connectDb } from "@/lib/db";
 
 // Shared bits for API route handlers: who's asking, input validation, consistent errors.
@@ -81,6 +81,8 @@ export const saveOverridesBody = z
             category,
             // A nickname to show instead of the UPI name. Omit to keep the current one, null to remove it.
             nickname: z.string().trim().min(1).max(40).nullable().optional(),
+            // For Friend labels: was money sent to them mostly lending, or your share of outings?
+            friendMode: z.enum(FRIEND_MODES as [string, ...string[]]).optional(),
           })
           .strict(),
       )

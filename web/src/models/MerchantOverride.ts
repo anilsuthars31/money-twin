@@ -13,6 +13,8 @@ const merchantOverrideSchema = new Schema(
     category: { type: String, enum: ALL_CATEGORIES, required: true },
     /** What the player calls them ("Gym trainer"), shown instead of the raw UPI name. */
     nickname: { type: String, maxlength: 40 },
+    /** For friends: money sent to them was mostly lending ("lend") or their share of outings ("share"). */
+    friendMode: { type: String, enum: ["lend", "share"] },
   },
   { timestamps: true, collection: "merchantOverrides" },
 );

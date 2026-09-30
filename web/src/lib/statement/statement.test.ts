@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
+import { ALL_CATEGORIES, INCOME_CATEGORIES, categoryForLabel, istHour } from "@/lib/categories";
 import { parseCsv } from "./csv";
 import { StatementError, extractCounterparty, parseKotakCsv, type StatementRow } from "./kotak";
 import {
@@ -273,5 +274,50 @@ describe("Who's who: friends, me, and others", () => {
     expect(cards[0]).toMatchObject({ total: 0, moneyBack: 16000 });
     expect(cards.map((c) => c.key)).not.toContain("arjunp");
     expect(cards.map((c) => c.key)).toContain("shanthipg"); // the usual unknown payees follow
+  });
+});
+
+describe("friends: lending vs my share, and people who pay you", () => {
+  const load = async () => (await processStatements([{ name: "s.csv", text: SAMPLE }])).transactions;
+
+  test("the share rule: small lunch or dinner payments are food, the rest outings (India time)", () => {
+    expect(istHour("2026-08-08T13:10:00+05:30")).toBe(13);
+    expect(istHour(new Date("2026-08-08T07:40:00Z"))).toBe(13); // stored as UTC, read in IST
+    expect(categoryForLabel("Friend", { type: "DR", amount: 250, datetime: "2026-08-08T20:15:00+05:30" }, "share")).toBe("Food");
+    expect(categoryForLabel("Friend", { type: "DR", amount: 650, datetime: "2026-08-08T17:20:00+05:30" }, "share")).toBe("Entertainment");
+    expect(categoryForLabel("Friend", { type: "DR", amount: 650, datetime: "2026-08-08T17:20:00+05:30" }, "lend")).toBe("Friend");
+    expect(categoryForLabel("Friend", { type: "CR", amount: 300, datetime: "2026-08-11T22:05:00+05:30" }, "share")).toBe("Friend"); // never income
+  });
+
+  test("only lending counts as 'owes you'; my share counts as my spending", async () => {
+    const txns = await load();
+    const labels = { arjunp: "Friend" };
+    const lend = applyLabels(txns, labels, { arjunp: "lend" });
+    const share = applyLabels(txns, labels, { arjunp: "share" });
+
+    expect(friendBalances(lend, {}, { arjunp: "lend" }).owedToYou).toBe(1540);
+    expect(friendBalances(share, {}, { arjunp: "share" })).toEqual({ friends: [], owedToYou: 0, youOwe: 0 });
+
+    const arjunOut = share.filter((t) => t.counterparty === "Arjun P" && t.type === "DR");
+    expect(arjunOut.map((t) => t.category)).toEqual(["Entertainment", "Entertainment", "Entertainment", "Entertainment"]);
+    // As spending, Arjun's payments (₹650 + ₹420 a month) are back in "spent"; his repayments still aren't income.
+    expect(summarise(share).spent - summarise(lend).spent).toBe(2 * (650 + 420));
+    expect(summarise(share).received).toBe(summarise(lend).received);
+  });
+
+  test("Who's who includes people with money going both ways, like a friend you split with", async () => {
+    const people = familyCandidates(await load());
+    const arjun = people.find((p) => p.counterparty === "Arjun P");
+    expect(arjun).toMatchObject({ sent: 2140, received: 600 });
+    expect(people.map((p) => p.counterparty)).not.toContain("Kiran Traders"); // a shop, not a person
+  });
+
+  test("someone who pays you can be labelled with an income reason", async () => {
+    expect(INCOME_CATEGORIES).toEqual(["Salary/Stipend", "Scholarship", "Refund", "Sold something", "Other income"]);
+    for (const c of INCOME_CATEGORIES) expect(ALL_CATEGORIES).toContain(c);
+    const labelled = applyLabels(await load(), { sunitadevi: "Scholarship" });
+    const sunita = labelled.filter((t) => t.counterparty === "Sunita Devi");
+    expect(sunita.every((t) => t.category === "Scholarship" && t.confidence === "user")).toBe(true);
+    expect(summarise(labelled).received).toBe(summarise(await load()).received); // still income
   });
 });

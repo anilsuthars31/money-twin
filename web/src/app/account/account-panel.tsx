@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 interface Me {
   user: { email: string; name: string; createdAt: string };
   counts: { transactions: number; overrides: number };
+  twin: boolean;
 }
 
 const CONFIRM_WORD = "DELETE";
@@ -78,12 +79,16 @@ export function AccountPanel({
               <dt className="text-xs text-muted-foreground">Payee labels</dt>
               <dd className="num text-2xl font-bold">{me ? me.counts.overrides.toLocaleString("en-IN") : "–"}</dd>
             </div>
+            <div className="col-span-2 rounded-2xl bg-white/[0.04] p-3">
+              <dt className="text-xs text-muted-foreground">Twin</dt>
+              <dd className="font-semibold">{me ? (me.twin ? "Character, XP and skills saved" : "Not saved yet") : "–"}</dd>
+            </div>
           </dl>
         )}
         <p className="mt-4 flex gap-2 text-xs text-muted-foreground text-pretty">
           <ShieldCheck className="size-4 shrink-0 text-money" aria-hidden />
-          Statement files are read on your device and never uploaded. Only categorised transactions and your payee labels
-          are stored here.
+          Statement files are read on your device and never uploaded. Only categorised transactions, your payee labels and
+          your twin (character, XP and skills) are stored here.
         </p>
       </section>
 
@@ -99,8 +104,12 @@ export function AccountPanel({
       <section className="rounded-3xl bg-alert/[0.06] p-5 ring-1 ring-alert/25">
         <h2 className="text-lg font-bold">Delete all my data</h2>
         <p className="mt-1 text-sm text-muted-foreground text-pretty">
-          Removes every saved transaction, all payee labels and your account from Money Twin. This can&apos;t be undone.
-          Your twin and skills saved on this device stay.
+          Removes everything saved in your account: every transaction, all payee labels and nicknames, your twin (character,
+          XP and skills), and the account itself. This can&apos;t be undone.
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground text-pretty">
+          A copy of your twin also lives in this browser so you can play without an account. It stays, and would be saved to
+          your account again if you sign in. To remove it too, clear this site&apos;s data in your browser settings.
         </p>
         {!confirming ? (
           <button
