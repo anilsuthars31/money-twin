@@ -1,0 +1,696 @@
+{
+  "info": {
+    "name": "Money Twin API",
+    "description": "Every Money Twin API route. Run the folders in order.\n\nAuth: in local development, `1. Sign in (dev login)` signs in with an email only (needs AUTH_DEV_LOGIN=true in web/.env.local). Postman keeps the session cookie for the other requests. Real users sign in with Google in the app.\n\nPrivacy: transactions are saved without the raw bank description. A request that includes `description` (or any unknown field) is rejected with 400.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "email",
+      "value": "postman-tester@example.com"
+    },
+    {
+      "key": "csrfToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Sign in (dev login)",
+      "item": [
+        {
+          "name": "Get CSRF token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/csrf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "csrf"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('csrfToken', pm.response.json().csrfToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sign in with email (dev only)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/callback/dev-login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "callback",
+                "dev-login"
+              ]
+            },
+            "description": "Local development only. Sets the session cookie.",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "csrfToken",
+                  "value": "{{csrfToken}}"
+                },
+                {
+                  "key": "email",
+                  "value": "{{email}}"
+                },
+                {
+                  "key": "callbackUrl",
+                  "value": "{{baseUrl}}/account"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('signed in (not sent back to an error page)', () => pm.expect(pm.response.code).to.be.below(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/session",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "session"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('session has the user id', () => {",
+                  "  const s = pm.response.json();",
+                  "  pm.expect(s.user.email).to.eql(pm.collectionVariables.get('email'));",
+                  "  pm.expect(s.user.id).to.match(/^[a-f0-9]{24}$/);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Me",
+      "item": [
+        {
+          "name": "Get my profile and counts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('counts present', () => pm.expect(pm.response.json().counts).to.have.keys('transactions', 'overrides'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Transactions",
+      "item": [
+        {
+          "name": "Clear my transactions (start fresh)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "transactions"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Save categorised transactions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "transactions"
+              ]
+            },
+            "description": "Body: { transactions: [...] }, up to 5,000 per request. `fingerprint` is a SHA-256 hex hash made in the browser.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactions\": [\n    {\n      \"fingerprint\": \"3b5f1c0a6d2e4f8a9b7c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e1f3a\",\n      \"datetime\": \"2026-08-03T13:10:00\",\n      \"amount\": 60,\n      \"type\": \"DR\",\n      \"balance\": 4940,\n      \"channel\": \"UPI\",\n      \"counterparty\": \"Manjunath S\",\n      \"category\": \"Paid to People\",\n      \"confidence\": \"low\"\n    },\n    {\n      \"fingerprint\": \"4c6a2d1b7e3f5a9b8c2d4e6f8a1b3c5d7e9f2a4b6c8d1e3f5a7b9c2d4e6f8a1b\",\n      \"datetime\": \"2026-08-04T13:10:00\",\n      \"amount\": 45,\n      \"type\": \"DR\",\n      \"balance\": 4955,\n      \"channel\": \"UPI\",\n      \"counterparty\": \"MANJUNATH  S\",\n      \"category\": \"Food & Dining\",\n      \"confidence\": \"low\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 created', () => pm.response.to.have.status(201));",
+                  "pm.test('2 inserted', () => pm.expect(pm.response.json().inserted).to.eql(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Save again with overlap (dedupe)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "transactions"
+              ]
+            },
+            "description": "An overlapping statement: the known row is matched on its fingerprint, only the new one is inserted.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactions\": [\n    {\n      \"fingerprint\": \"3b5f1c0a6d2e4f8a9b7c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e1f3a\",\n      \"datetime\": \"2026-08-03T13:10:00\",\n      \"amount\": 60,\n      \"type\": \"DR\",\n      \"balance\": 4940,\n      \"channel\": \"UPI\",\n      \"counterparty\": \"Manjunath S\",\n      \"category\": \"Paid to People\",\n      \"confidence\": \"low\"\n    },\n    {\n      \"fingerprint\": \"5d7b3e2c8f4a6b1c9d3e5f7a2b4c6d8e1f3a5b7c9d2e4f6a8b1c3d5e7f9a2b4c\",\n      \"datetime\": \"2026-08-09T13:10:00\",\n      \"amount\": 250,\n      \"type\": \"DR\",\n      \"balance\": 4750,\n      \"channel\": \"UPI\",\n      \"counterparty\": \"Swiggy\",\n      \"category\": \"Food & Dining\",\n      \"confidence\": \"high\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('only the new row inserted', () => pm.expect(pm.response.json()).to.include({ received: 2, inserted: 1 }));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List my transactions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/transactions?limit=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('3 transactions, newest first', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.total).to.eql(3);",
+                  "  pm.expect(b.transactions[0].counterparty).to.eql('Swiggy');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List with a date range",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/transactions?from=2026-08-01&to=2026-08-05&limit=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-08-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-08-05"
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('2 in range', () => pm.expect(pm.response.json().total).to.eql(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rejected: raw description included",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "transactions"
+              ]
+            },
+            "description": "The API refuses raw statement text.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactions\": [\n    {\n      \"fingerprint\": \"5d7b3e2c8f4a6b1c9d3e5f7a2b4c6d8e1f3a5b7c9d2e4f6a8b1c3d5e7f9a2b4c\",\n      \"datetime\": \"2026-08-09T13:10:00\",\n      \"amount\": 250,\n      \"type\": \"DR\",\n      \"balance\": 4750,\n      \"channel\": \"UPI\",\n      \"counterparty\": \"Swiggy\",\n      \"category\": \"Food & Dining\",\n      \"confidence\": \"low\",\n      \"description\": \"UPI/Swiggy/612345678901/Paid\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Payee labels (merchant overrides)",
+      "item": [
+        {
+          "name": "Label payees (Teach your twin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/overrides",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "overrides"
+              ]
+            },
+            "description": "Upserts labels and re-labels matching saved transactions (name compared without case or spaces).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"overrides\": [\n    {\n      \"counterparty\": \"Manjunath S\",\n      \"category\": \"Food\"\n    },\n    {\n      \"counterparty\": \"Ramesh Kumar\",\n      \"category\": \"Family\"\n    },\n    {\n      \"counterparty\": \"My Own Name\",\n      \"category\": \"Self\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('3 saved', () => pm.expect(pm.response.json().saved).to.eql(3));",
+                  "pm.test('both Manjunath S rows re-labelled', () => pm.expect(pm.response.json().relabelledTransactions).to.eql(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List my labels",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/overrides",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "overrides"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('3 labels', () => pm.expect(pm.response.json().overrides.length).to.eql(3));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Forget one label",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/overrides/My%20Own%20Name",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "overrides",
+                "My%20Own%20Name"
+              ]
+            },
+            "description": "Key = the payee name (case and spaces ignored), URL-encoded."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Forget a label that doesn't exist",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/overrides/Nobody",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "overrides",
+                "Nobody"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Delete all my data",
+      "item": [
+        {
+          "name": "Delete all my data",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            },
+            "description": "Removes transactions, payee labels and the account. The app then signs the user out."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('everything deleted', () => {",
+                  "  const d = pm.response.json().deleted;",
+                  "  pm.expect(d.transactions).to.eql(3);",
+                  "  pm.expect(d.overrides).to.eql(2);",
+                  "  pm.expect(d.account).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Profile is gone",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 after deletion', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sign out",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/signout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "signout"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "csrfToken",
+                  "value": "{{csrfToken}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('signed out', () => pm.expect(pm.response.code).to.be.below(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Signed out: API refuses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

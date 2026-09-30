@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import Lenis from "lenis";
@@ -53,7 +53,7 @@ const STEPS = [
   },
 ];
 
-export function Landing() {
+export function Landing({ accountLink }: { accountLink: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   const [show3D, setShow3D] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- needs browser APIs, so it can't run during SSR
@@ -85,9 +85,12 @@ export function Landing() {
         <span className="font-display text-lg font-bold tracking-tight">
           Money<span className="text-money">Twin</span>
         </span>
-        <Link href="/play/demo" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-          Play demo
-        </Link>
+        <nav className="flex items-center gap-4 text-sm text-muted-foreground">
+          <Link href="/play/demo" className="transition-colors hover:text-foreground">
+            Play demo
+          </Link>
+          {accountLink}
+        </nav>
       </header>
 
       <section className="flex min-h-[calc(100svh-4.5rem)] flex-col justify-center pb-10">

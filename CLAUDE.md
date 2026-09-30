@@ -72,7 +72,12 @@ Don't ask for a bank statement first; users won't trust a new app with money dat
 - Backend: Next.js API routes (no separate server)
 - Database: **MongoDB** via Mongoose. Atlas free tier for deployment, local MongoDB for dev.
   Connection string in `.env.local` as `MONGODB_URI` (never commit it). Developer inspects data with MongoDB Compass.
-- Auth: Auth.js (NextAuth) with Google sign-in
+- Auth: Auth.js (NextAuth v5) with Google sign-in. Config in `web/.env.local` (git-ignored): `AUTH_SECRET`,
+  `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `MONGODB_URI`. Google redirect URI: `http://localhost:3000/api/auth/callback/google`.
+- **Dev login is never available in production.** `AUTH_DEV_LOGIN=true` adds an email-only sign-in for Postman and tests,
+  but `isDevLoginEnabled()` (`web/src/lib/dev-login.ts`) also requires NODE_ENV ≠ production, so `next build`/`next start`
+  ignore the flag (verified: prod server offers only Google and refuses dev-login callbacks). Unit-tested. Leave
+  `AUTH_DEV_LOGIN` out of production env vars anyway.
 - Suggested collections: `users`, `characters` (stats, level, type), `transactions` (categorised only, never raw
   files), `merchantOverrides` (per-user payee → category), `chapters` (monthly events + report card), `goals`
 - API testing: Postman. When you add or change an API route, also update `postman/money-twin.postman_collection.json`
@@ -102,6 +107,14 @@ Don't ask for a bank statement first; users won't trust a new app with money dat
       Months carry over (closing balance becomes next opening balance, debt repaid first, mood continues,
       plan suggested halfway from last month's spending toward 50/30/20);
       lessons use the player's own numbers. Engine in `web/src/game/engine.ts`; tests via `npm test`
+- [x] Accounts + storage: Auth.js v5 (Google; dev-only email login via AUTH_DEV_LOGIN=true for Postman/tests),
+      Mongoose models `users` / `transactions` (no raw descriptions, deduped by fingerprint) / `merchantOverrides`,
+      API routes `/api/me` (GET, DELETE = delete all my data), `/api/transactions`, `/api/overrides`,
+      account page at `/account`. Postman collection in `postman/`; API tests use the `money-twin-test` DB.
+      Verified: real Google sign-in (college Workspace account) creates the `users` document; dev login is off in production.
+      Sign-in UX: returns to `?callbackUrl=` (same-site paths only, default `/account`); Google always shows its account
+      chooser; signed-in landing shows "Welcome back" instead of the hero; header shows Sign in / avatar.
+      E2E tests: `npm run test:e2e` (Playwright, installed Chrome, dev server).
 - [ ] In-browser statement upload + privacy screen (TypeScript port of the parser)
 - [ ] Teach-your-twin swipe cards
 - [ ] Replay last 6 months as chapters + dashboard
