@@ -720,6 +720,51 @@ export interface ReportCard {
   finalLedger: Ledger;
 }
 
+/**
+ * The month's score and grade (shared by the demo month and real-month replays). Plan vs actual
+ * carries the most weight: sticking to the plan, then reaching the goal, planning to save at all,
+ * no debt, and mood. Overshooting an envelope by 50% or more scores zero for it, and heavy
+ * overspending caps the grade: a D envelope means at most C overall, a C envelope at most B.
+ */
+export function gradeMonth(m: {
+  spentNeeds: number;
+  plannedNeeds: number;
+  spentWants: number;
+  wantsBudget: number;
+  savingsKept: number;
+  savingsGoal: number;
+  planSavingsPct: number;
+  debt: number;
+  happiness: number;
+  stress: number;
+  envelopes: Pick<EnvelopeReview, "env" | "grade">[];
+}): { score: number; grade: Grade } {
+  const overshoot = (a: number, b: number) => clamp01(1 - (2 * Math.max(0, a - b)) / Math.max(b, 1));
+  const adherence = (overshoot(m.spentNeeds, m.plannedNeeds) + overshoot(m.spentWants, m.wantsBudget)) / 2;
+  const goalHit = clamp01(m.savingsKept / Math.max(1, m.savingsGoal));
+  const planQuality = clamp01(m.planSavingsPct / 20);
+  const noDebt = m.debt > 0 ? 0 : 1;
+  const mood = (m.happiness + 100 - m.stress) / 200;
+  const raw = Math.round(45 * adherence + 25 * goalHit + 10 * planQuality + 10 * noDebt + 10 * mood);
+  const spendGrades = m.envelopes.filter((e) => e.env === "needs" || e.env === "wants").map((e) => e.grade);
+  const cap = spendGrades.includes("D") ? 64 : spendGrades.includes("C") ? 79 : 100;
+  const score = Math.min(raw, cap);
+  return { score, grade: score >= 80 ? "A" : score >= 65 ? "B" : score >= 50 ? "C" : "D" };
+}
+
+/** Plan vs actual grade for spending envelopes (at or under budget is an A). */
+export const gradeSpend = (actual: number, budget: number): Grade => {
+  const r = actual / Math.max(budget, 1);
+  return r <= 1 ? "A" : r <= 1.1 ? "B" : r <= 1.25 ? "C" : "D";
+};
+
+/** Plan vs actual grade for savings (kept at least what was planned is an A). */
+export const gradeSave = (kept: number, target: number): Grade => {
+  if (target <= 0) return kept > 0 ? "B" : "D";
+  const r = kept / target;
+  return r >= 1 ? "A" : r >= 0.8 ? "B" : r >= 0.5 ? "C" : "D";
+};
+
 export function reportCard(
   base: Persona,
   type: CharacterType,
@@ -748,15 +793,6 @@ export function reportCard(
   const finalLedger: Ledger = { needs: 0, wants: 0, emergency: 0, savings: pot - repay, locked: 0, debt: l.debt - repay };
   const savingsKept = finalLedger.savings - finalLedger.debt;
 
-  const gradeSpend = (actual: number, budget: number): Grade => {
-    const r = actual / Math.max(budget, 1);
-    return r <= 1 ? "A" : r <= 1.1 ? "B" : r <= 1.25 ? "C" : "D";
-  };
-  const gradeSave = (kept: number, target: number): Grade => {
-    if (target <= 0) return kept > 0 ? "B" : "D";
-    const r = kept / target;
-    return r >= 1 ? "A" : r >= 0.8 ? "B" : r >= 0.5 ? "C" : "D";
-  };
   const wantsBudget = sim.planned.wants + extraIncome;
   const emergencyUsed = sim.planned.emergency - l.emergency;
   const emergencyReview: EnvelopeReview[] =
@@ -814,20 +850,19 @@ export function reportCard(
     ...emergencyReview,
   ];
 
-  // Plan vs actual carries the most weight: sticking to the plan, then reaching the goal, planning
-  // to save at all, no debt, and mood. Overshooting an envelope by 50% or more scores zero for it.
-  const overshoot = (a: number, b: number) => clamp01(1 - (2 * Math.max(0, a - b)) / Math.max(b, 1));
-  const adherence = (overshoot(spentNeeds, sim.planned.needs) + overshoot(spentWants, wantsBudget)) / 2;
-  const goalHit = clamp01(savingsKept / persona.savingsGoal);
-  const planQuality = clamp01(plan.savings / 20);
-  const noDebt = finalLedger.debt > 0 ? 0 : 1;
-  const mood = (sim.stats.happiness + 100 - sim.stats.stress) / 200;
-  const raw = Math.round(45 * adherence + 25 * goalHit + 10 * planQuality + 10 * noDebt + 10 * mood);
-  // Heavy overspending caps the grade: a D envelope means at most C overall, a C envelope at most B.
-  const spendGrades = envelopes.filter((e) => e.env === "needs" || e.env === "wants").map((e) => e.grade);
-  const cap = spendGrades.includes("D") ? 64 : spendGrades.includes("C") ? 79 : 100;
-  const score = Math.min(raw, cap);
-  const grade: Grade = score >= 80 ? "A" : score >= 65 ? "B" : score >= 50 ? "C" : "D";
+  const { score, grade } = gradeMonth({
+    spentNeeds,
+    plannedNeeds: sim.planned.needs,
+    spentWants,
+    wantsBudget,
+    savingsKept,
+    savingsGoal: persona.savingsGoal,
+    planSavingsPct: plan.savings,
+    debt: finalLedger.debt,
+    happiness: sim.stats.happiness,
+    stress: sim.stats.stress,
+    envelopes,
+  });
 
   const byCat = new Map<string, number>();
   for (const t of debits) byCat.set(t.category, (byCat.get(t.category) ?? 0) + t.amount);

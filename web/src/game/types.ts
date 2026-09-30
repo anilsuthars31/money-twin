@@ -170,7 +170,13 @@ export type IconName =
   | "heart"
   | "gift"
   | "wrench"
-  | "tv";
+  | "tv"
+  | "plane"
+  | "graduation"
+  | "pill"
+  | "receipt"
+  | "trending-down"
+  | "calendar";
 
 export interface GameEvent {
   id: string;
