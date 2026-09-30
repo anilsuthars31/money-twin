@@ -48,11 +48,13 @@ const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 function OtherForm({
   person,
   initial,
+  warning,
   onSave,
   onCancel,
 }: {
   person: PersonCandidate;
   initial?: { nickname: string; category: string };
+  warning?: string; // shown when the player tries to move on without saving
   onSave: (nickname: string, category: string) => void;
   onCancel: () => void;
 }) {
@@ -67,7 +69,8 @@ function OtherForm({
   const id = `other-${person.key}`;
   return (
     <form
-      className="mt-3 space-y-3 rounded-2xl bg-white/[0.04] p-3"
+      id={id}
+      className={cn("mt-3 space-y-3 rounded-2xl bg-white/[0.04] p-3", warning && "ring-2 ring-alert/60")}
       aria-label={`Who is ${person.counterparty}?`}
       onSubmit={(e) => {
         e.preventDefault();
@@ -75,6 +78,11 @@ function OtherForm({
         if (name && category) onSave(name.slice(0, 40), category);
       }}
     >
+      {warning && (
+        <p role="alert" className="rounded-xl bg-alert/10 px-3 py-2 text-sm text-alert ring-1 ring-alert/30">
+          {warning}
+        </p>
+      )}
       <div>
         <label htmlFor={`${id}-name`} className="text-sm font-medium">
           Who is it?
@@ -140,6 +148,24 @@ export function WhosWhoStep({
   onContinue: () => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+
+  /**
+   * An open, unsaved "Other" form isn't thrown away when the player taps someone else: it stays
+   * open with a warning (and scrolls back into view) until it's saved or cancelled.
+   */
+  const blockedBy = (key: string) => {
+    if (!editing || editing === key) return false;
+    const open = people.find((x) => x.key === editing);
+    const other = people.find((x) => x.key === key);
+    setWarning(`Save or cancel who ${open?.counterparty ?? "this"} is before choosing for ${other?.counterparty ?? "someone else"}.`);
+    document.getElementById(`other-${editing}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return true;
+  };
+  const closeForm = () => {
+    setEditing(null);
+    setWarning(null);
+  };
   const unmarked = people.filter((p) => !tags[p.key]).length;
   const friendQuestionOpen = people.some((p) => needsFriendMode(p, tags[p.key] ?? null));
 
@@ -187,8 +213,9 @@ export function WhosWhoStep({
                         aria-checked={on}
                         aria-label={`${p.counterparty}: ${o.label}`}
                         onClick={() => {
-                          if (o.kind === "Other") return setEditing(isEditing ? null : p.key);
-                          setEditing(null);
+                          if (blockedBy(p.key)) return;
+                          if (o.kind === "Other") return isEditing ? closeForm() : setEditing(p.key);
+                          closeForm();
                           onTag(p.key, tag?.kind === o.kind ? null : { kind: o.kind }); // tap again to un-mark
                         }}
                         className={cn(
@@ -212,7 +239,9 @@ export function WhosWhoStep({
                           type="button"
                           role="radio"
                           aria-checked={tag.mode === o.mode}
-                          onClick={() => onTag(p.key, { kind: "Friend", mode: o.mode })}
+                          onClick={() => {
+                            if (!blockedBy(p.key)) onTag(p.key, { kind: "Friend", mode: o.mode });
+                          }}
                           className={cn(
                             "min-h-10 rounded-xl px-3 text-left text-sm font-medium ring-1 transition",
                             tag.mode === o.mode ? "bg-money/15 text-money ring-money/60" : "bg-white/[0.03] ring-white/10 hover:bg-white/[0.07]",
@@ -235,7 +264,9 @@ export function WhosWhoStep({
                 {tag?.kind === "Other" && !isEditing && (
                   <button
                     type="button"
-                    onClick={() => setEditing(p.key)}
+                    onClick={() => {
+                      if (!blockedBy(p.key)) setEditing(p.key);
+                    }}
                     className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                   >
                     <Pencil className="size-3" /> {tag.category} · change
@@ -245,10 +276,11 @@ export function WhosWhoStep({
                   <OtherForm
                     person={p}
                     initial={tag?.kind === "Other" ? { nickname: tag.nickname, category: tag.category } : undefined}
-                    onCancel={() => setEditing(null)}
+                    warning={warning ?? undefined}
+                    onCancel={closeForm}
                     onSave={(nickname, category) => {
                       onTag(p.key, { kind: "Other", nickname, category });
-                      setEditing(null);
+                      closeForm();
                     }}
                   />
                 )}

@@ -160,3 +160,24 @@ test("people not marked in Who's who come up first in the swipe cards", async ({
   await expect(card).toHaveAttribute("aria-label", "Who is Arjun P?");
   await page.request.delete("/api/me");
 });
+
+test("an unsaved Other form isn't thrown away when you pick another person", async ({ page }) => {
+  await signInAndUpload(page, `unsaved-${Date.now()}@example.com`);
+  await page.getByRole("radio", { name: "Arjun P: Other" }).click();
+  const form = page.getByRole("form", { name: "Who is Arjun P?" });
+  await form.getByLabel("Who is it?").fill("Gym trainer");
+
+  await page.getByRole("radio", { name: "Sunita Devi: Family" }).click();
+  await expect(form).toBeVisible(); // still open…
+  await expect(form.getByLabel("Who is it?")).toHaveValue("Gym trainer"); // …with what was typed
+  await expect(form.getByRole("alert")).toHaveText("Save or cancel who Arjun P is before choosing for Sunita Devi.");
+  await expect(page.getByRole("radio", { name: "Sunita Devi: Family" })).toHaveAttribute("aria-checked", "false");
+
+  // Once saved, other people can be marked again.
+  await form.getByRole("radio", { name: "Health" }).click();
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form).toHaveCount(0);
+  await page.getByRole("radio", { name: "Sunita Devi: Family" }).click();
+  await expect(page.getByRole("radio", { name: "Sunita Devi: Family" })).toHaveAttribute("aria-checked", "true");
+  await page.request.delete("/api/me");
+});
