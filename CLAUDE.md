@@ -159,6 +159,9 @@ Don't ask for a bank statement first; users won't trust a new app with money dat
       Home "Continue your twin" → `/replay` when real months are saved, demo otherwise.
       The sample statement's July (calm) and August (delivery streak, late-night Amazon, cash) differ on purpose.
       Dev login keeps a typed email as a draft in sessionStorage, so a dev-server reload never clears it.
+      Demo prep: `npm run demo:reset` (dev server running) wipes `live@moneytwin.dev` and re-seeds `demo@moneytwin.dev`
+      (sample statement taught, twin Aarav, July replayed), then warms every page. `e2e/demo-flow.spec.ts` clicks the
+      whole demo (landing → demo month → sign in → sample → Who's who → cards → save → dashboard → replay with What-ifs).
       Tests: 3 synthetic players in `replay/fixtures.ts` (₹8k student, ₹30k first job, irregular freelancer) must
       get different stories; e2e `e2e/replay.spec.ts` uploads the sample statement and replays August.
 - [x] Dashboard "Where your money goes" at `/dashboard` (signed in; signed out → sign-in): month chips, spent vs last

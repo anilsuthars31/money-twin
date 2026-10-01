@@ -81,7 +81,7 @@ test("Delete all my data removes everything and signs out", async ({ page }) => 
   await page.reload();
   await expect(page.locator("dl")).toContainText("2");
 
-  await expect(page.getByText(/your twin \(character,\s+XP and skills\), and the account itself/)).toBeVisible();
+  await expect(page.getByText(/your twin \(character,\s+XP, skills and replayed months\), and the account itself/)).toBeVisible();
   await expect(page.getByText(/A copy of your twin also lives in this browser/)).toBeVisible();
   await page.getByRole("button", { name: "Delete all my data" }).click();
   const confirm = page.getByRole("button", { name: "Delete forever" });

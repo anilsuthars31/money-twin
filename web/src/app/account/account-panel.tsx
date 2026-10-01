@@ -81,14 +81,14 @@ export function AccountPanel({
             </div>
             <div className="col-span-2 rounded-2xl bg-white/[0.04] p-3">
               <dt className="text-xs text-muted-foreground">Twin</dt>
-              <dd className="font-semibold">{me ? (me.twin ? "Character, XP and skills saved" : "Not saved yet") : "–"}</dd>
+              <dd className="font-semibold">{me ? (me.twin ? "Character, XP, skills and replayed months saved" : "Not saved yet") : "–"}</dd>
             </div>
           </dl>
         )}
         <p className="mt-4 flex gap-2 text-xs text-muted-foreground text-pretty">
           <ShieldCheck className="size-4 shrink-0 text-money" aria-hidden />
           Statement files are read on your device and never uploaded. Only categorised transactions, your payee labels and
-          your twin (character, XP and skills) are stored here.
+          your twin (character, XP, skills and the grades of months you replayed) are stored here.
         </p>
       </section>
 
@@ -105,7 +105,7 @@ export function AccountPanel({
         <h2 className="text-lg font-bold">Delete all my data</h2>
         <p className="mt-1 text-sm text-muted-foreground text-pretty">
           Removes everything saved in your account: every transaction, all payee labels and nicknames, your twin (character,
-          XP and skills), and the account itself. This can&apos;t be undone.
+          XP, skills and replayed months), and the account itself. This can&apos;t be undone.
         </p>
         <p className="mt-2 text-sm text-muted-foreground text-pretty">
           A copy of your twin also lives in this browser so you can play without an account. It stays, and would be saved to
