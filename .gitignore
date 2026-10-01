@@ -1,5 +1,7 @@
 # Real bank data - never commit
 *.csv
+# …except the made-up sample statement the app offers as "Try a sample" (no real data)
+!web/public/sample-kotak-statement.csv
 transactions.json
 parser/merchant_overrides.json
 statements/
