@@ -11,7 +11,7 @@ async function devSignIn(page: Page, email: string) {
   await page.goto("/account");
   await page.getByLabel(/Dev login/).fill(email);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText("What's saved")).toBeVisible();
+  await expect(page.getByText("What's saved")).toBeVisible({ timeout: 15_000 }); // the dev server may be busy compiling
 }
 
 async function uploadSample(page: Page) {
@@ -62,10 +62,26 @@ test("replay a real month: plan, live the weeks, report card, grade on the timel
   await page.getByLabel("Needs").fill("60"); // a plan of your own
   await page.getByRole("button", { name: /Lock in plan/ }).click();
 
-  // Live the weeks: a summary, then events built from real payments.
+  // Live the weeks: What-if moments, a summary, then events built from real payments.
+  // The first What-if takes the better move; the rest stay "Same as real".
   const seen: string[] = [];
-  for (let i = 0; i < 30; i++) {
+  const whatIfs: string[] = [];
+  let promised = 0;
+  for (let i = 0; i < 40; i++) {
     if (await page.getByText("August 2026 report card").isVisible()) break;
+    const moment = page.getByRole("article", { name: /^What if:/ });
+    if (await moment.isVisible()) {
+      whatIfs.push((await moment.getAttribute("aria-label"))!);
+      await expect(page.locator("div.fixed button")).toBeDisabled(); // a choice is needed first
+      if (whatIfs.length === 1) {
+        const better = moment.getByRole("group").getByRole("button").first();
+        promised = Number((await better.getAttribute("aria-label"))!.match(/keeps ₹([\d,]+)/)![1].replace(/,/g, ""));
+        await better.click();
+        await expect(moment).toContainText("kept by What-if you");
+      } else {
+        await moment.getByRole("button", { name: /^Same as real/ }).click();
+      }
+    }
     const event = page.locator("article h2").first();
     if (await event.isVisible()) seen.push((await page.locator("main").innerText()).replace(/\s+/g, " "));
     await page.locator("div.fixed button").click();
@@ -74,10 +90,18 @@ test("replay a real month: plan, live the weeks, report card, grade on the timel
   expect(seen.length).toBeGreaterThan(4);
   for (const text of seen) expect(text).not.toMatch(/NaN|undefined|\[object/);
   expect(seen.some((t) => /₹[\d,]+/.test(t))).toBe(true);
+  // August in the sample has a late-night Amazon buy, a delivery streak and a cash withdrawal.
+  expect(whatIfs.length).toBeGreaterThanOrEqual(2);
+  expect(whatIfs.length).toBeLessThanOrEqual(3);
+  expect(promised).toBeGreaterThan(0);
+
+  // Real you vs What-if you, with the difference in rupees.
+  const compare = page.getByRole("region", { name: "Real you vs What-if you" });
+  await expect(compare).toContainText(`What-if you kept ₹${promised.toLocaleString("en-IN")} more`);
 
   // Report card: grade, plan vs actual, real categories.
   await expect(page.getByLabel(/^Grade [ABCD]$/)).toBeVisible();
-  await expect(page.getByText("Your plan vs what really happened")).toBeVisible();
+  await expect(page.getByText("Your plan vs What-if you")).toBeVisible(); // a better move was picked
   await expect(page.getByRole("list", { name: "Spending by category" })).toContainText("Rent/PG");
   const grade = (await page.getByLabel(/^Grade [ABCD]$/).innerText()).trim();
 
@@ -95,11 +119,15 @@ test("replay a real month: plan, live the weeks, report card, grade on the timel
   // The timeline shows the grade, and the result reaches the account.
   await expect(page.getByText("1 of 2 replayed")).toBeVisible();
   await expect(months.nth(1)).toHaveAccessibleName(new RegExp(`grade ${grade}$`));
+  await expect(page.getByTestId("what-if-total")).toContainText(`₹${promised.toLocaleString("en-IN")} more across 1 month`);
   await expect
     .poll(async () => (await (await page.request.get("/api/twin")).json()).twin?.replay?.months?.["2026-08"]?.grade, { timeout: 10_000 })
     .toBe(grade);
   const twin = (await (await page.request.get("/api/twin")).json()).twin;
-  expect(Object.keys(twin.replay.months["2026-08"]).sort()).toEqual(["grade", "plan", "playedAt", "savingsKept", "score", "stats"]);
+  expect(Object.keys(twin.replay.months["2026-08"]).sort()).toEqual(
+    ["grade", "plan", "playedAt", "realGrade", "savingsKept", "score", "stats", "whatIfSaved"].sort(),
+  );
+  expect(twin.replay.months["2026-08"].whatIfSaved).toBe(promised);
 
   await page.request.delete("/api/me");
 });

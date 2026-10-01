@@ -187,6 +187,7 @@ export interface GameEvent {
   body: string;
   amount?: number; // ₹ shown big on the card
   delta: MoodDelta;
+  day?: number; // day of the month it happened (real-month replay); events are shown in date order
   lesson?: LessonId;
 }
 

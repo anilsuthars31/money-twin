@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { handle, requireUserId } from "@/lib/api";
 import { Transaction } from "@/models/Transaction";
 
-// Neither spending nor income: internal bank moves, transfers between your own accounts, and
-// money with friends (lent or paid back). Same rules as the rest of the app.
-const NOT_COUNTED = ["Internal (ignore)", "Self Transfer", "Friend"];
+// Same rules as the replay and the dashboard (src/game/replay/real-month.ts):
+// - spent: everything out except internal bank moves, your own accounts, and money lent to friends;
+// - came in: everything in except internal bank moves and your own accounts. That's income plus
+//   refunds/cashback/interest plus friends paying you back.
+const NOT_SPENT = ["Internal (ignore)", "Self Transfer", "Friend"];
+const NOT_RECEIVED = ["Internal (ignore)", "Self Transfer"];
 
 /**
  * GET /api/months: every month with saved transactions (in India time), oldest first, with how
@@ -19,10 +22,10 @@ export const GET = handle(async () => {
         _id: { $dateToString: { format: "%Y-%m", date: "$datetime", timezone: "+05:30" } },
         count: { $sum: 1 },
         spent: {
-          $sum: { $cond: [{ $and: [{ $eq: ["$type", "DR"] }, { $not: [{ $in: ["$category", NOT_COUNTED] }] }] }, "$amount", 0] },
+          $sum: { $cond: [{ $and: [{ $eq: ["$type", "DR"] }, { $not: [{ $in: ["$category", NOT_SPENT] }] }] }, "$amount", 0] },
         },
         received: {
-          $sum: { $cond: [{ $and: [{ $eq: ["$type", "CR"] }, { $not: [{ $in: ["$category", NOT_COUNTED] }] }] }, "$amount", 0] },
+          $sum: { $cond: [{ $and: [{ $eq: ["$type", "CR"] }, { $not: [{ $in: ["$category", NOT_RECEIVED] }] }] }, "$amount", 0] },
         },
       },
     },

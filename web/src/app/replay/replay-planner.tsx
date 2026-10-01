@@ -4,7 +4,8 @@ import { Lightbulb, ReceiptText, Target, TriangleAlert } from "lucide-react";
 import { ENVELOPE_STYLE } from "@/components/twin/envelope-bars";
 import { DEFAULT_PLAN, inr, withEmergencySlice } from "@/game/engine";
 import { goalFor, plannableOf, realSplit, replayPlanAmounts } from "@/game/replay/replay";
-import type { MonthMoney, RealMonth } from "@/game/replay/real-month";
+import { cameIn, cameInParts, type MonthMoney, type RealMonth } from "@/game/replay/real-month";
+import { CameInParts } from "@/components/twin/came-in";
 import type { Envelope, Plan } from "@/game/types";
 import { cn } from "@/lib/utils";
 import { rebalance } from "../play/demo/planner";
@@ -52,9 +53,11 @@ export function ReplayPlanner({
         <div className="text-xs font-medium text-money">Replay {month.label}</div>
         <h2 className="mt-1 text-2xl font-bold leading-tight text-balance">If you&apos;d planned {monthName}…</h2>
         <p className="mt-1 text-sm text-muted-foreground text-pretty">
-          {inr(Math.max(0, money.opening))} was in the account and {inr(income)} came in. Split {inr(total)} into envelopes; your real
-          payments will come out of them, week by week.
+          {inr(Math.max(0, money.opening))} was in the account and {inr(cameIn(money))} came in. Split the account plus your{" "}
+          {inr(income)} income, {inr(total)}, into envelopes; your real payments will come out of them, week by week.
+          {cameIn(money) > income && " Refunds and money friends pay back land in Wants when they arrive."}
         </p>
+        <CameInParts parts={cameInParts(money)} className="mt-2" />
 
         <div className="mt-5 space-y-5">
           {envs.map((env) => {

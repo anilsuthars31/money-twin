@@ -286,6 +286,8 @@ describe.skipIf(!mongoUp)("API routes (local MongoDB)", () => {
           { ...txn(3, "Ramesh Kumar", "Family Support"), type: "CR", amount: 8000, datetime: "2026-08-01T09:00:00+05:30" },
           { ...txn(4, "Arjun P", "Friend"), amount: 500, datetime: "2026-08-05T20:00:00+05:30" }, // lent: not spending
           { ...txn(5, "Me", "Self Transfer"), type: "CR", amount: 3000, datetime: "2026-08-06T10:00:00+05:30" }, // not income
+          { ...txn(7, "Arjun P", "Friend"), type: "CR", amount: 300, datetime: "2026-08-09T20:00:00+05:30" }, // paid back: came in
+          { ...txn(8, "Swiggy", "Refund"), type: "CR", amount: 120, datetime: "2026-08-10T20:00:00+05:30" }, // refund: came in
           { ...txn(6), amount: 50, datetime: "2026-09-02T13:00:00+05:30" },
         ],
       }),
@@ -293,7 +295,7 @@ describe.skipIf(!mongoUp)("API routes (local MongoDB)", () => {
     const body = await (await monthsRoute.GET()).json();
     expect(body.months).toEqual([
       { month: "2026-07", count: 1, spent: 100, received: 0 },
-      { month: "2026-08", count: 4, spent: 200, received: 8000 },
+      { month: "2026-08", count: 6, spent: 200, received: 8000 + 300 + 120 }, // same "came in" as the report card
       { month: "2026-09", count: 1, spent: 50, received: 0 },
     ]);
     signInAs(bob);
@@ -336,6 +338,9 @@ describe.skipIf(!mongoUp)("API routes (local MongoDB)", () => {
     const withReplay = (await (await twinRoute.GET()).json()).twin;
     expect(withReplay.replay).toEqual(replay);
     expect(withReplay.character.name).toBe("Kavya R");
+    const whatIf = { months: { "2026-08": { ...result, whatIfSaved: 1299, realGrade: "C" } } };
+    expect((await twinRoute.PUT(req("/api/twin", "PUT", { replay: whatIf }))).status).toBe(200);
+    expect((await (await twinRoute.GET()).json()).twin.replay.months["2026-08"]).toMatchObject({ whatIfSaved: 1299, realGrade: "C" });
     const withTxns = { months: { "2026-08": { ...result, txns: [] } } };
     expect((await twinRoute.PUT(req("/api/twin", "PUT", { replay: withTxns }))).status).toBe(400);
     expect((await twinRoute.PUT(req("/api/twin", "PUT", { replay: { months: { august: result } } }))).status).toBe(400);

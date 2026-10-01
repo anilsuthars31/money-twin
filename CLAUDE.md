@@ -147,8 +147,18 @@ Don't ask for a bank statement first; users won't trust a new app with money dat
       Report card: plan vs actual, spending by real category, friends who owe you, lessons from real habits using
       real numbers (`lessonContext`). Results only (grade, score, savings kept, end stats, plan) are saved in
       `money-twin:replay` and the `twins.replay` field (merged across devices: latest result per month); mood
-      carries from the latest earlier month. No player choices in replay (it's the real past).
+      carries from the latest earlier month.
+      "What if?" moments (`replay/what-if.ts`): 2–3 per month at real key events (big impulse buy, delivery streak,
+      month-end crunch, cash withdrawal; one of each at most, payments never counted by two moments). "Same as real" or
+      a better move linked to a skill (24-hour rule, cook twice, pause wants, UPI instead of cash) that changes the
+      month's transactions; the report shows "Real you vs What-if you" with the difference in ₹, and the timeline
+      totals What-if savings (`whatIfSaved`, `realGrade` in replay progress).
+      Each week: money coming in (refunds, friends paying back) lands before that week's payments; events are picked
+      by priority, then shown in date order. "Came in" is one definition everywhere (month list, planner, report,
+      dashboard): income + refunds/cashback/interest + friends paying back, with a breakdown under it.
       Home "Continue your twin" → `/replay` when real months are saved, demo otherwise.
+      The sample statement's July (calm) and August (delivery streak, late-night Amazon, cash) differ on purpose.
+      Dev login keeps a typed email as a draft in sessionStorage, so a dev-server reload never clears it.
       Tests: 3 synthetic players in `replay/fixtures.ts` (₹8k student, ₹30k first job, irregular freelancer) must
       get different stories; e2e `e2e/replay.spec.ts` uploads the sample statement and replays August.
 - [x] Dashboard "Where your money goes" at `/dashboard` (signed in; signed out → sign-in): month chips, spent vs last

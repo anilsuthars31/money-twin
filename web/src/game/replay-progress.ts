@@ -15,6 +15,9 @@ export interface MonthResult {
   stats: Stats; // at the end of the month
   plan: Plan;
   playedAt: string; // ISO
+  /** "What if?" moments: how much more the What-if you kept than the real you (0 if all "Same as real"). */
+  whatIfSaved?: number;
+  realGrade?: Grade; // the grade with every moment "Same as real"
 }
 
 export interface ReplayProgress {
@@ -64,6 +67,9 @@ export function saveMonthResult(key: string, result: Omit<MonthResult, "playedAt
   const at = new Date().toISOString();
   applyReplay({ months: { ...p.months, [key]: { ...result, playedAt: at } }, updatedAt: at });
 }
+
+/** What-if savings across every month replayed. */
+export const totalWhatIfSaved = (p: ReplayProgress) => Object.values(p.months).reduce((s, r) => s + Math.max(0, r.whatIfSaved ?? 0), 0);
 
 /** How the twin feels going into a month: the end of the latest earlier month played, if any. */
 export function moodBefore(p: ReplayProgress, key: string): Pick<Stats, "happiness" | "stress"> | undefined {

@@ -12,7 +12,7 @@ function TrendTooltip({ active, payload }: { active?: boolean; payload?: { paylo
       <div className="font-semibold">{m.label}</div>
       <div className="num mt-1 text-goal">Needs {inr(m.needs)}</div>
       <div className="num text-happy">Wants {inr(m.wants)}</div>
-      <div className="num mt-1 text-muted-foreground">Came in {inr(m.income + m.extra)}</div>
+      <div className="num mt-1 text-muted-foreground">Came in {inr(m.cameIn)}</div>
     </div>
   );
 }

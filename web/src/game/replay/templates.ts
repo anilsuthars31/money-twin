@@ -36,6 +36,8 @@ export interface TemplateCtx {
   autoSaved: number;
   savingsStreak: number; // weeks in a row with savings moved in and never raided
   fired: Set<string>; // template ids already shown this month
+  /** Days of the payments the template mentioned while firing (filled in by `who` / `onDate`). */
+  touched?: number[];
 }
 
 type Fill = Omit<GameEvent, "id" | "week">;
@@ -54,9 +56,17 @@ export const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 const sum = (xs: { amount: number }[]) => xs.reduce((s, t) => s + t.amount, 0);
 const pct = (c: TemplateCtx, n: number) => Math.round((n / c.income) * 100);
 const over = (c: TemplateCtx, frac: number, floor: number) => Math.max(floor, c.income * frac);
-const who = (c: TemplateCtx, t: RealTxn) => nameOf(c.m, t.counterparty);
+/** Marks a payment as part of the event, so the event is dated by it. */
+const touch = (c: TemplateCtx, t: RealTxn) => c.touched?.push(dayOf(t));
+const who = (c: TemplateCtx, t: RealTxn) => {
+  touch(c, t);
+  return nameOf(c.m, t.counterparty);
+};
 const monthShort = (c: TemplateCtx) => new Date(Date.UTC(c.m.year, c.m.month - 1, 1)).toLocaleString("en-IN", { month: "short", timeZone: "UTC" });
-const onDate = (c: TemplateCtx, t: RealTxn) => `${dayOf(t)} ${monthShort(c)}`;
+const onDate = (c: TemplateCtx, t: RealTxn) => {
+  touch(c, t);
+  return `${dayOf(t)} ${monthShort(c)}`;
+};
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const inCats = (ts: RealTxn[], ...cats: string[]) => ts.filter((t) => cats.includes(t.category));
 const spent = (ts: RealTxn[]) => ts.filter(isSpend);
@@ -77,9 +87,9 @@ const INCOME_CATS = ["Salary", "Salary/Stipend", "Other income", "Other Income",
 function ev(
   title: string,
   body: string,
-  o: { icon: IconName; tone: EventTone; amount?: number; delta?: MoodDelta; lesson?: LessonId },
+  o: { icon: IconName; tone: EventTone; amount?: number; delta?: MoodDelta; lesson?: LessonId; day?: number },
 ): Fill {
-  return { title, body, icon: o.icon, tone: o.tone, amount: o.amount, delta: o.delta ?? {}, lesson: o.lesson };
+  return { title, body, icon: o.icon, tone: o.tone, amount: o.amount, delta: o.delta ?? {}, lesson: o.lesson, day: o.day };
 }
 
 // ---------------------------------------------------------------- the library (priority order)
@@ -90,10 +100,11 @@ export const TEMPLATES: EventTemplate[] = [
     id: "borrowed",
     group: "consequence",
     fire: (c) => {
-      const d = sum(c.raids.filter((r) => r.from === "debt"));
+      const debts = c.raids.filter((r) => r.from === "debt");
+      const d = sum(debts);
       if (!d) return null;
       return ev(`Ran out: ${inr(d)} short`, "Every envelope hit zero before the month did. In real life that gap came from a friend, a credit card or home.", {
-        icon: "alert", tone: "bad", amount: d, delta: { stress: 15, happiness: -8 }, lesson: "emergency-fund",
+        icon: "alert", tone: "bad", amount: d, day: debts[0].day, delta: { stress: 15, happiness: -8 }, lesson: "emergency-fund",
       });
     },
   },
@@ -104,7 +115,7 @@ export const TEMPLATES: EventTemplate[] = [
       const r = c.raids.filter((x) => x.from === "savings");
       if (!r.length) return null;
       return ev(`Broke into savings on day ${r[0].day}`, `Needs and Wants were both empty, so ${inr(sum(r))} came out of Savings.`, {
-        icon: "piggy-bank", tone: "bad", amount: sum(r), delta: { stress: 8, happiness: -5 }, lesson: "emergency-fund",
+        icon: "piggy-bank", tone: "bad", amount: sum(r), day: r[0].day, delta: { stress: 8, happiness: -5 }, lesson: "emergency-fund",
       });
     },
   },
@@ -116,7 +127,7 @@ export const TEMPLATES: EventTemplate[] = [
       if (!r.length) return null;
       const amount = r.reduce((s, x) => s + x.amount, 0);
       return ev(`Wants ran dry on day ${r[0].day}`, `${inr(amount)} of fun money came out of Needs: food and travel money for the rest of the month.`, {
-        icon: "alert", tone: "bad", amount, delta: { stress: 10, happiness: -3 }, lesson: "running-low",
+        icon: "alert", tone: "bad", amount, day: r[0].day, delta: { stress: 10, happiness: -3 }, lesson: "running-low",
       });
     },
   },
@@ -128,7 +139,7 @@ export const TEMPLATES: EventTemplate[] = [
       if (!r.length) return null;
       const amount = r.reduce((s, x) => s + x.amount, 0);
       return ev("Essentials cost more than planned", `${inr(amount)} came out of Wants to cover them.`, {
-        icon: "receipt", tone: "neutral", amount, delta: { stress: 5, happiness: -2 }, lesson: "fixed-costs",
+        icon: "receipt", tone: "neutral", amount, day: r[0].day, delta: { stress: 5, happiness: -2 }, lesson: "fixed-costs",
       });
     },
   },
@@ -740,22 +751,27 @@ export const QUIET_WEEK: EventTemplate = {
 
 export const MAX_EVENTS_PER_WEEK = 3;
 
-/** The events for one week: templates in priority order, each once a month unless it repeats. */
+/**
+ * The events for one week: templates are picked in priority order (each once a month unless it
+ * repeats), then shown in the order they happened. An event is dated by the payments it mentions
+ * (the latest of them), a raid by the day the envelope ran dry, anything else by the week's end.
+ */
 export function eventsForWeek(c: TemplateCtx): GameEvent[] {
   const events: GameEvent[] = [];
   for (const t of TEMPLATES) {
     if (events.length >= MAX_EVENTS_PER_WEEK) break;
     if (!t.repeats && c.fired.has(t.id)) continue;
-    const fill = t.fire(c);
+    const touched: number[] = [];
+    const fill = t.fire({ ...c, touched });
     if (!fill) continue;
     const id = t.repeats ? `${t.id}-${c.week}` : t.id;
     c.fired.add(t.id);
     c.fired.add(id);
-    events.push({ ...fill, id, week: c.week });
+    events.push({ ...fill, id, week: c.week, day: fill.day ?? (touched.length ? Math.max(...touched) : c.to) });
   }
   if (!events.length) {
     const fill = QUIET_WEEK.fire(c)!;
-    events.push({ ...fill, id: `quiet-week-${c.week}`, week: c.week });
+    events.push({ ...fill, id: `quiet-week-${c.week}`, week: c.week, day: c.to });
   }
-  return events;
+  return events.map((e, i) => ({ e, i })).sort((a, b) => a.e.day! - b.e.day! || a.i - b.i).map(({ e }) => e);
 }

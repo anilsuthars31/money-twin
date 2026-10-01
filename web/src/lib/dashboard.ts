@@ -1,5 +1,7 @@
 import {
   buildRealMonth,
+  cameIn,
+  cameInParts,
   displayCategory,
   flowOf,
   isSpend,
@@ -22,7 +24,9 @@ export interface DashMonth {
   label: string; // "August 2026"
   short: string; // "Aug"
   income: number;
-  extra: number; // refunds, cashback, interest
+  extra: number; // refunds, cashback, interest, friends paying back
+  cameIn: number; // income + extra: the one "came in" used everywhere
+  cameInParts: { label: string; amount: number }[];
   spent: number; // needs + wants
   needs: number;
   wants: number;
@@ -64,6 +68,8 @@ export function monthSummary(m: RealMonth): DashMonth {
     short: new Date(Date.UTC(m.year, m.month - 1, 1)).toLocaleString("en-IN", { month: "short", timeZone: "UTC" }),
     income: round(money.income),
     extra: round(money.extra + money.friendBack),
+    cameIn: round(cameIn(money)),
+    cameInParts: cameInParts(money),
     spent: round(money.spent),
     needs: round(money.needs),
     wants: round(money.wants),

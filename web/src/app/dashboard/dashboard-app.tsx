@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, GraduationCap, HandCoins, History, Upload } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { CameInParts } from "@/components/twin/came-in";
 import { CountUp } from "@/components/twin/count-up";
 import { ENVELOPE_STYLE } from "@/components/twin/envelope-bars";
 import { inr } from "@/game/engine";
@@ -204,9 +205,10 @@ export function DashboardApp() {
               </div>
               <div>
                 <div className="text-[11px] text-money">Came in</div>
-                <div className="num font-bold">{inr(now.income + now.extra)}</div>
+                <div className="num font-bold">{inr(now.cameIn)}</div>
               </div>
             </div>
+            <CameInParts parts={now.cameInParts} className="mt-3" />
             {now.count < PARTIAL_MONTH && (
               <p className="mt-3 text-xs text-muted-foreground">Only {now.count} payments saved: probably part of a month.</p>
             )}

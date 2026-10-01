@@ -10,7 +10,7 @@ async function devSignIn(page: Page, email: string) {
   await page.goto("/account");
   await page.getByLabel(/Dev login/).fill(email);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText("What's saved")).toBeVisible();
+  await expect(page.getByText("What's saved")).toBeVisible({ timeout: 15_000 }); // the dev server may be busy compiling
 }
 
 /** Removes the test user so runs don't pile up accounts in the dev database. */
@@ -99,4 +99,27 @@ test("Delete all my data removes everything and signs out", async ({ page }) => 
   const me = await (await page.request.get("/api/me")).json();
   expect(me.counts).toEqual({ transactions: 0, overrides: 0 });
   await cleanUp(page, email);
+});
+
+test("dev login keeps what you typed if the page reloads while loading", async ({ page }) => {
+  await page.goto("/account");
+  await page.getByLabel(/Dev login/).fill("draft@example.com");
+  await page.reload(); // e.g. the dev server finishing a compile
+  await expect(page.getByLabel(/Dev login/)).toHaveValue("draft@example.com");
+
+  // Typed before the page was interactive (slow scripts): kept once it is.
+  await page.route(/\/_next\/static\/.*\.js/, async (r) => {
+    await new Promise((res) => setTimeout(res, 1500));
+    await r.continue().catch(() => {}); // the route may be removed while this request waits
+  });
+  await page.goto("/account", { waitUntil: "commit" });
+  const input = page.locator("#dev-email");
+  await input.waitFor({ state: "attached" });
+  await input.evaluate((el: HTMLInputElement) => (el.value = ""));
+  await input.focus();
+  await page.keyboard.type("early@example.com");
+  await page.waitForFunction(() => document.documentElement.hasAttribute("data-hydrated"));
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  await page.reload();
+  await expect(page.getByLabel(/Dev login/)).toHaveValue("early@example.com");
 });

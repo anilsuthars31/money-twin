@@ -653,7 +653,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"replay\": {\n    \"months\": {\n      \"2026-08\": {\n        \"grade\": \"B\",\n        \"score\": 74,\n        \"savingsKept\": 3200,\n        \"stats\": {\n          \"savings\": 40,\n          \"happiness\": 62,\n          \"stress\": 35,\n          \"goal\": 100\n        },\n        \"plan\": {\n          \"needs\": 50,\n          \"wants\": 30,\n          \"savings\": 20,\n          \"emergency\": 0\n        },\n        \"playedAt\": \"2026-09-12T10:00:00Z\"\n      }\n    },\n    \"updatedAt\": \"2026-09-12T10:00:00Z\"\n  }\n}"
+              "raw": "{\n  \"replay\": {\n    \"months\": {\n      \"2026-08\": {\n        \"grade\": \"B\",\n        \"score\": 74,\n        \"savingsKept\": 3200,\n        \"stats\": {\n          \"savings\": 40,\n          \"happiness\": 62,\n          \"stress\": 35,\n          \"goal\": 100\n        },\n        \"plan\": {\n          \"needs\": 50,\n          \"wants\": 30,\n          \"savings\": 20,\n          \"emergency\": 0\n        },\n        \"playedAt\": \"2026-09-12T10:00:00Z\",\n        \"whatIfSaved\": 1299,\n        \"realGrade\": \"C\"\n      }\n    },\n    \"updatedAt\": \"2026-09-12T10:00:00Z\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/twin",
@@ -665,7 +665,7 @@
                 "twin"
               ]
             },
-            "description": "Grades of replayed real months: results only (grade, score, savings kept, end stats, plan). Sending only `replay` keeps the character and skills."
+            "description": "Grades of replayed real months: results only (grade, score, savings kept, end stats, plan, and What-if: how much more the What-if you kept, and the grade with every moment Same as real). Sending only `replay` keeps the character and skills."
           },
           "event": [
             {

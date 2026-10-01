@@ -4,6 +4,7 @@ import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { auth, devLoginEnabled, googleConfigured, signIn, signOut } from "@/auth";
 import { safeCallbackUrl } from "@/lib/safe-redirect";
 import { AccountPanel } from "./account-panel";
+import { DevLoginForm } from "./dev-login-form";
 
 export const metadata: Metadata = { title: "Account · Money Twin" };
 
@@ -85,27 +86,7 @@ export default async function AccountPage({ searchParams }: PageProps<"/account"
               </p>
             )}
 
-            {devLoginEnabled && (
-              <form action={devLogin} className="rounded-2xl border border-dashed border-white/15 p-3">
-                <input type="hidden" name="callbackUrl" value={returnTo} />
-                <label htmlFor="dev-email" className="text-xs font-medium text-muted-foreground">
-                  Dev login (local only, for testing)
-                </label>
-                <div className="mt-2 flex gap-2">
-                  <input
-                    id="dev-email"
-                    name="email"
-                    type="email"
-                    required
-                    placeholder="tester@example.com"
-                    className="h-11 min-w-0 flex-1 rounded-xl bg-white/[0.06] px-3 text-sm outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-money/60"
-                  />
-                  <button type="submit" className="h-11 rounded-xl bg-raised px-4 text-sm font-semibold ring-1 ring-white/10">
-                    Sign in
-                  </button>
-                </div>
-              </form>
-            )}
+            {devLoginEnabled && <DevLoginForm action={devLogin} callbackUrl={returnTo} />}
           </div>
 
           <p className="mt-5 flex gap-2 text-xs text-muted-foreground text-pretty">

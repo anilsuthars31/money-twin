@@ -13,6 +13,7 @@ import { DEFAULT_PLAN, inr, withEmergencySlice } from "@/game/engine";
 import { walletOf } from "@/game/ledger";
 import { buildRealMonth, flowOf, nameOf, type FriendMode, type RealMonth, type RealTxn } from "@/game/replay/real-month";
 import { plannableOf, replayPlanAmounts, replayReport, simulateReplay } from "@/game/replay/replay";
+import { applyChoices, findMoments, type WhatIfChoices } from "@/game/replay/what-if";
 import { moodBefore, saveMonthResult, useReplayProgress } from "@/game/replay-progress";
 import { abilitiesOf, learnLesson, saveLessonContext, useSkills } from "@/game/skills";
 import type { Character, Ledger, LessonId, Plan, Stats } from "@/game/types";
@@ -21,6 +22,7 @@ import { EventCard, RaidList } from "../play/demo/event-card";
 import { MonthList, type MonthSummary } from "./month-list";
 import { ReplayPlanner } from "./replay-planner";
 import { ReplayReport } from "./replay-report";
+import { WhatIfCard } from "./what-if-card";
 
 // "Replay your real past": pick a month you have saved → plan it → live its real weeks (events from
 // the rules library) → report card → skills from your real habits. The grade, and how the twin
@@ -32,7 +34,7 @@ const MAX_LESSONS_PER_MONTH = 3;
 type Phase =
   | { kind: "pick" }
   | { kind: "plan" }
-  | { kind: "week"; w: number; step: number } // step -1 = summary, 0..n-1 = events
+  | { kind: "week"; w: number; step: number } // step -k-1..-2 = this week's k What-if moments, -1 = summary, 0..n-1 = events
   | { kind: "report" }
   | { kind: "learn"; i: number };
 
@@ -74,7 +76,8 @@ export function ReplayApp() {
   const [learnQueue, setLearnQueue] = useState<LessonId[]>([]);
   const [finished, setFinished] = useState<Partial<Record<LessonId, boolean>>>({});
   const labels = useRef<{ nicknames: Record<string, string>; friendModes: Record<string, FriendMode> } | null>(null);
-  const savedFor = useRef<string | null>(null); // the plan whose result has been saved
+  const [choices, setChoices] = useState<WhatIfChoices>({});
+  const savedFor = useRef<string | null>(null); // the plan + choices whose result has been saved
 
   const fetchMonths = useCallback(
     () =>
@@ -94,13 +97,22 @@ export function ReplayApp() {
   const abilities = abilitiesOf(skills);
   const emergency = abilities.includes("emergency-envelope");
 
-  const sim = useMemo(() => (month ? simulateReplay(month, plan, twin.type, startMood) : null), [month, plan, twin.type, startMood]);
-  const report = useMemo(() => (sim && (phase.kind === "report" || phase.kind === "learn") ? replayReport(sim) : null), [sim, phase.kind]);
+  // The real month as it played with this plan, its What-if moments, and the month with the player's choices.
+  const realSim = useMemo(() => (month ? simulateReplay(month, plan, twin.type, startMood) : null), [month, plan, twin.type, startMood]);
+  const moments = useMemo(() => (realSim ? findMoments(realSim) : []), [realSim]);
+  const sim = useMemo(
+    () => (month && realSim ? (moments.some((x) => choices[x.id] === "better") ? simulateReplay(applyChoices(month, moments, choices), plan, twin.type, startMood) : realSim) : null),
+    [month, realSim, moments, choices, plan, twin.type, startMood],
+  );
+  const atEnd = phase.kind === "report" || phase.kind === "learn";
+  const report = useMemo(() => (sim && atEnd ? replayReport(sim) : null), [sim, atEnd]);
+  const realReport = useMemo(() => (realSim && atEnd ? replayReport(realSim) : null), [realSim, atEnd]);
+  const momentsOf = (w: number) => moments.filter((x) => x.week === w + 1);
 
   // Save the result once the report card is reached (replaying with a new plan replaces it).
   useEffect(() => {
-    if (!report || !month) return;
-    const id = `${month.key}:${JSON.stringify(plan)}`;
+    if (!report || !realReport || !month) return;
+    const id = `${month.key}:${JSON.stringify(plan)}:${JSON.stringify(choices)}`;
     if (savedFor.current === id) return;
     savedFor.current = id;
     saveMonthResult(month.key, {
@@ -109,8 +121,10 @@ export function ReplayApp() {
       savingsKept: Math.round(report.savingsKept),
       stats: report.finalStats,
       plan,
+      whatIfSaved: Math.max(0, Math.round(report.savingsKept - realReport.savingsKept)),
+      realGrade: realReport.grade,
     });
-  }, [report, month, plan]);
+  }, [report, realReport, month, plan, choices]);
 
   async function openMonth(key: string) {
     setOpening(key);
@@ -133,6 +147,7 @@ export function ReplayApp() {
       const previous = progress.months[key]?.plan;
       setPlan(previous ?? (emergency ? withEmergencySlice(DEFAULT_PLAN) : DEFAULT_PLAN));
       savedFor.current = null;
+      setChoices({});
       setPhase({ kind: "plan" });
       window.scrollTo({ top: 0 });
     } catch (e) {
@@ -142,8 +157,10 @@ export function ReplayApp() {
     }
   }
 
+  // Skills behind the better moves the player picked come first: they chose them.
+  const pickedLessons = moments.filter((x) => choices[x.id] === "better").map((x) => x.better.lesson);
   const newLessons = report
-    ? [report.lesson, ...report.lessons].filter((l, i, all) => all.indexOf(l) === i && !skills.learned[l]).slice(0, MAX_LESSONS_PER_MONTH)
+    ? [...pickedLessons, report.lesson, ...report.lessons].filter((l, i, all) => all.indexOf(l) === i && !skills.learned[l]).slice(0, MAX_LESSONS_PER_MONTH)
     : [];
 
   function startLearning() {
@@ -167,10 +184,11 @@ export function ReplayApp() {
   function next() {
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (!sim) return;
-    if (phase.kind === "plan") return setPhase({ kind: "week", w: 0, step: -1 });
+    const startWeek = (w: number) => setPhase({ kind: "week", w, step: -momentsOf(w).length - 1 });
+    if (phase.kind === "plan") return startWeek(0);
     if (phase.kind === "week" && week) {
       if (phase.step < week.events.length - 1) return setPhase({ ...phase, step: phase.step + 1 });
-      if (phase.w < sim.weeks.length - 1) return setPhase({ kind: "week", w: phase.w + 1, step: -1 });
+      if (phase.w < sim.weeks.length - 1) return startWeek(phase.w + 1);
       return setPhase({ kind: "report" });
     }
     if (phase.kind === "learn") {
@@ -265,7 +283,14 @@ export function ReplayApp() {
   const planned = replayPlanAmounts(money, plan);
   let ledger: Ledger = sim.startLedger;
   let stats: Stats = sim.startStats;
-  if (phase.kind === "week" && week) {
+  // A What-if moment comes before the week's payments: the HUD shows how last week ended.
+  const weekMoments = phase.kind === "week" ? momentsOf(phase.w) : [];
+  const moment = phase.kind === "week" && phase.step < -1 ? weekMoments[phase.step + weekMoments.length + 1] : undefined;
+  if (phase.kind === "week" && week && moment) {
+    const last = phase.w > 0 ? sim.weeks[phase.w - 1] : undefined;
+    ledger = last ? last.ledgerAfterTxns : sim.startLedger;
+    stats = last ? (last.statsAfterEvent.at(-1) ?? last.statsAfterTxns) : sim.startStats;
+  } else if (phase.kind === "week" && week) {
     ledger = week.ledgerAfterTxns;
     stats = phase.step < 0 ? week.statsAfterTxns : week.statsAfterEvent[phase.step];
   } else if (report) {
@@ -283,7 +308,10 @@ export function ReplayApp() {
   let canNext = true;
   if (planning) label = `Lock in plan · replay ${monthName}`;
   else if (phase.kind === "week" && week) {
-    if (phase.step === -1) label = "See what happened";
+    if (moment) {
+      canNext = choices[moment.id] !== undefined;
+      label = canNext ? "Continue" : "Pick one";
+    } else if (phase.step === -1) label = "See what happened";
     else if (phase.step === week.events.length - 1) label = phase.w < weekCount - 1 ? "Next week" : "See report card";
   } else if (phase.kind === "learn") {
     canNext = finished[learnQueue[phase.i]] !== undefined;
@@ -379,6 +407,16 @@ export function ReplayApp() {
           </>
         )}
 
+        {moment && (
+          <WhatIfCard
+            key={moment.id}
+            moment={moment}
+            monthShort={month.label.slice(0, 3)}
+            picked={choices[moment.id]}
+            onPick={(c) => setChoices((x) => ({ ...x, [moment.id]: c }))}
+          />
+        )}
+
         {phase.kind === "week" && week && phase.step === -1 && (
           <article data-card className="rounded-3xl bg-card p-5 ring-1 ring-white/5">
             <div className="text-xs font-medium text-muted-foreground">Week {week.week}</div>
@@ -452,7 +490,11 @@ export function ReplayApp() {
             report={report}
             newLessons={newLessons}
             onLearn={startLearning}
+            realReport={moments.length ? realReport : null}
+            moments={moments}
+            choices={choices}
             onReplay={() => {
+              setChoices({});
               setPhase({ kind: "plan" });
               window.scrollTo({ top: 0 });
             }}

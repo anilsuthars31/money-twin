@@ -21,7 +21,7 @@ test("sign-in returns you to the page you started from", async ({ page }) => {
 test("with no starting page, sign-in lands on /account (not the landing page)", async ({ page }) => {
   await devSignInFrom(page, "/account", `default-${Date.now()}@example.com`);
   await expect(page).toHaveURL(/\/account$/);
-  await expect(page.getByText("What's saved")).toBeVisible();
+  await expect(page.getByText("What's saved")).toBeVisible({ timeout: 15_000 }); // the dev server may be busy compiling
   await cleanUp(page);
 });
 

@@ -3,6 +3,8 @@ import { autoSave, ledgerFromAmounts, receive, saved, spend, walletOf } from "..
 import type { LessonContext } from "../lessons";
 import type { CharacterType, Envelope, GameEvent, Ledger, LessonId, MoodDelta, Plan, Raid, Stats } from "../types";
 import {
+  cameIn,
+  cameInParts,
   dayOf,
   displayCategory,
   flowOf,
@@ -114,11 +116,16 @@ export function simulateReplay(
     const week = m.txns.filter((t) => dayOf(t) >= w.from && dayOf(t) <= w.to);
     const autoSaved = autoSave(ledger, planned.savings, w.week);
     const raids: Raid[] = [];
+    // Money coming in this week (refunds, cashback, friends paying back) lands first, so an envelope
+    // is never raided for a gap that this week's own money fills. Then payments, in date order.
+    for (const t of week) {
+      const flow = flowOf(t);
+      if (flow === "extra" || flow === "friend-back") receive(ledger, t.amount);
+    }
     for (const t of week) {
       const flow = flowOf(t);
       if (flow === "need") spend(ledger, "needs", t.amount, w.week, dayOf(t), raids);
       else if (flow === "want" || flow === "lent") spend(ledger, "wants", t.amount, w.week, dayOf(t), raids);
-      else if (flow === "extra" || flow === "friend-back") receive(ledger, t.amount);
       // "income" is already in the plan; "ignore" never touches the envelopes.
     }
     streak = autoSaved > 0 && !raids.some((r) => r.from === "savings") ? streak + 1 : 0;
@@ -183,7 +190,9 @@ export interface ReplayReport {
   score: number;
   headline: string;
   income: number;
-  extra: number;
+  extra: number; // refunds/cashback/interest + friends paying back
+  cameIn: number; // income + extra: the one "came in" used everywhere
+  cameInParts: { label: string; amount: number }[];
   spent: number;
   swept: number;
   savingsKept: number;
@@ -330,6 +339,8 @@ export function replayReport(sim: ReplaySim): ReplayReport {
     headline,
     income: money.income,
     extra: money.extra + money.friendBack,
+    cameIn: cameIn(money),
+    cameInParts: cameInParts(money),
     spent: money.spent,
     swept,
     savingsKept,

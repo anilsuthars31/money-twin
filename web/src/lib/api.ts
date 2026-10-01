@@ -101,6 +101,8 @@ const monthResult = z
     stats: z.object({ savings: pct, happiness: pct, stress: pct, goal: pct }).strict(),
     plan: z.object({ needs: pct, wants: pct, savings: pct, emergency: pct.optional() }).strict(),
     playedAt: isoish,
+    whatIfSaved: z.number().min(0).max(1e9).optional(),
+    realGrade: z.enum(["A", "B", "C", "D"]).optional(),
   })
   .strict();
 

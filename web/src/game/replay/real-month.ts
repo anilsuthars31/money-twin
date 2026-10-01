@@ -169,6 +169,22 @@ export function monthMoney(m: RealMonth): MonthMoney {
   };
 }
 
+/**
+ * "Came in", one definition everywhere (month list, planner, report card, dashboard): income plus
+ * refunds/cashback/interest plus friends paying you back. Only moves between your own accounts and
+ * internal bank entries are left out.
+ */
+export const cameIn = (m: Pick<MonthMoney, "income" | "extra" | "friendBack">) => m.income + m.extra + m.friendBack;
+
+/** The parts of "came in" that aren't zero: "₹9,500 income + ₹150 refunds & cashback + ₹300 from friends". */
+export function cameInParts(m: Pick<MonthMoney, "income" | "extra" | "friendBack">) {
+  return [
+    { label: "income", amount: Math.round(m.income) },
+    { label: "refunds & cashback", amount: Math.round(m.extra) },
+    { label: "from friends", amount: Math.round(m.friendBack) },
+  ].filter((p) => p.amount > 0);
+}
+
 /** Week 1 is days 1–7, week 2 8–14, week 3 15–21, week 4 the rest. */
 export function weeksOf(m: RealMonth) {
   return [

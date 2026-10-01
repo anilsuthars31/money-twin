@@ -1,30 +1,89 @@
-import { ArrowRight, CalendarDays, HandCoins, Lightbulb, RotateCcw } from "lucide-react";
+import { ArrowRight, CalendarDays, HandCoins, Lightbulb, RotateCcw, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CameInParts } from "@/components/twin/came-in";
 import { CountUp } from "@/components/twin/count-up";
 import { ENVELOPE_STYLE } from "@/components/twin/envelope-bars";
 import { inr } from "@/game/engine";
 import { LESSON_INFO } from "@/game/lessons";
 import type { ReplayReport as Report } from "@/game/replay/replay";
+import type { WhatIfChoices, WhatIfMoment } from "@/game/replay/what-if";
 import type { LessonId } from "@/game/types";
 import { cn } from "@/lib/utils";
 import { EnvelopeRow, GRADE_STYLE } from "../play/demo/report-card";
 
 const CATEGORY_ROWS = 6;
 
+/** Kept at month end, or how short it ended. */
+const keptLabel = (r: Report) => (r.debt > 0 ? `${inr(r.debt)} short` : `${inr(Math.max(0, r.savingsKept))} kept`);
+
+/** "Real you vs What-if you": the same month with and without the better moves. */
+function RealVsWhatIf({ real, whatIf, moments, choices }: { real: Report; whatIf: Report; moments: WhatIfMoment[]; choices: WhatIfChoices }) {
+  const diff = Math.round(whatIf.savingsKept - real.savingsKept);
+  const better = moments.filter((x) => choices[x.id] === "better");
+  return (
+    <section data-card aria-label="Real you vs What-if you" className="rounded-3xl bg-card p-5 ring-1 ring-goal/30">
+      <h3 className="flex items-center gap-2 text-lg font-bold">
+        <Wand2 className="size-5 text-goal" aria-hidden /> Real you vs What-if you
+      </h3>
+      <div className="mt-4 grid grid-cols-2 gap-2 text-center">
+        {[
+          { who: "Real you", r: real },
+          { who: "What-if you", r: whatIf },
+        ].map(({ who, r }) => (
+          <div key={who} className="rounded-2xl bg-white/[0.03] p-3">
+            <div className="text-xs text-muted-foreground">{who}</div>
+            <div className={cn("mx-auto mt-2 grid size-12 place-items-center rounded-full font-display text-2xl font-bold ring-2", GRADE_STYLE[r.grade])}>
+              {r.grade}
+            </div>
+            <div className={cn("num mt-2 text-sm font-semibold", r.debt > 0 ? "text-alert" : "text-foreground")}>{keptLabel(r)}</div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-center text-sm text-pretty" data-testid="what-if-difference">
+        {diff > 0 ? (
+          <>
+            What-if you kept <span className="num font-bold text-money">{inr(diff)}</span> more
+          </>
+        ) : (
+          "You kept every moment the same as real."
+        )}
+      </p>
+      {better.length > 0 && (
+        <ul className="mt-3 space-y-1.5 text-sm">
+          {better.map((x) => (
+            <li key={x.id} className="flex items-baseline gap-2">
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">{x.better.label}</span>
+              <span className="num font-semibold text-money">+{inr(x.better.saves)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export function ReplayReport({
   report,
+  realReport,
+  moments,
+  choices,
   newLessons,
   onLearn,
   onReplay,
   onMonths,
 }: {
   report: Report;
+  realReport: Report | null; // the month with every moment "Same as real" (null when there were no moments)
+  moments: WhatIfMoment[];
+  choices: WhatIfChoices;
   newLessons: LessonId[];
   onLearn: () => void;
   onReplay: () => void;
   onMonths: () => void;
 }) {
   const monthName = report.monthLabel.split(" ")[0];
+  // With a better move picked, the rest of the card describes the What-if month.
+  const whatIfPlayed = moments.some((x) => choices[x.id] === "better");
   const cats = report.categories.slice(0, CATEGORY_ROWS);
   const rest = report.categories.slice(CATEGORY_ROWS);
   const maxCat = cats[0]?.amount ?? 1;
@@ -46,7 +105,7 @@ export function ReplayReport({
         <div className="mt-5 grid grid-cols-3 divide-x divide-white/5 rounded-2xl bg-white/[0.03] py-3">
           <div>
             <div className="text-[11px] text-muted-foreground">Came in</div>
-            <CountUp from={0} value={report.income + report.extra} className="num text-lg font-bold text-money" />
+            <CountUp from={0} value={report.cameIn} className="num text-lg font-bold text-money" />
           </div>
           <div>
             <div className="text-[11px] text-muted-foreground">Spent</div>
@@ -61,10 +120,13 @@ export function ReplayReport({
             />
           </div>
         </div>
+        <CameInParts parts={report.cameInParts} className="mt-3" />
       </section>
 
+      {realReport && <RealVsWhatIf real={realReport} whatIf={report} moments={moments} choices={choices} />}
+
       <section data-card className="rounded-3xl bg-card p-5 ring-1 ring-white/5">
-        <h3 className="text-lg font-bold">Your plan vs what really happened</h3>
+        <h3 className="text-lg font-bold">{whatIfPlayed ? "Your plan vs What-if you" : "Your plan vs what really happened"}</h3>
         <p className="mb-3 mt-1 text-sm text-muted-foreground text-pretty">
           The white line is your plan. Amber means the real month went past it; for Savings, past it is good.
           {report.swept > 0 && ` ${inr(report.swept)} left unspent was moved into Savings.`}
@@ -78,6 +140,7 @@ export function ReplayReport({
 
       <section data-card className="rounded-3xl bg-card p-5 ring-1 ring-white/5">
         <h3 className="text-lg font-bold">Where {monthName}&apos;s money went</h3>
+        {whatIfPlayed && <p className="mt-0.5 text-xs text-muted-foreground">As What-if you spent it.</p>}
         <ul className="mt-4 space-y-3" aria-label="Spending by category">
           {cats.map((c) => (
             <li key={`${c.category}|${c.envelope}`}>

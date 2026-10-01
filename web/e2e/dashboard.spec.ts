@@ -9,7 +9,7 @@ async function devSignIn(page: Page, email: string) {
   await page.goto("/account");
   await page.getByLabel(/Dev login/).fill(email);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText("What's saved")).toBeVisible();
+  await expect(page.getByText("What's saved")).toBeVisible({ timeout: 15_000 }); // the dev server may be busy compiling
 }
 
 test("dashboard: month totals, trend, categories against last month, top payees", async ({ page }) => {

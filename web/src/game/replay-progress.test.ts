@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { DEFAULT_PLAN } from "./engine";
-import { mergeReplay, moodBefore, type MonthResult, type ReplayProgress } from "./replay-progress";
+import { mergeReplay, moodBefore, totalWhatIfSaved, type MonthResult, type ReplayProgress } from "./replay-progress";
 import { mergeTwin } from "./twin-merge";
 
 const result = (grade: MonthResult["grade"], playedAt: string, happiness = 60, stress = 30): MonthResult => ({
@@ -20,6 +20,17 @@ describe("replay progress", () => {
     expect(moodBefore(p, "2026-08")).toEqual({ happiness: 55, stress: 45 });
     expect(moodBefore(p, "2026-07")).toEqual({ happiness: 40, stress: 70 });
     expect(moodBefore(p, "2026-06")).toBeUndefined();
+  });
+
+  test("What-if savings add up across months", () => {
+    const p: ReplayProgress = {
+      months: {
+        "2026-06": { ...result("C", "2026-09-01T00:00:00Z"), whatIfSaved: 1299 },
+        "2026-07": { ...result("B", "2026-09-02T00:00:00Z"), whatIfSaved: 0 },
+        "2026-08": result("A", "2026-09-03T00:00:00Z"), // played before What-if existed
+      },
+    };
+    expect(totalWhatIfSaved(p)).toBe(1299);
   });
 
   test("merging keeps every month played on either device, the latest result for each", () => {

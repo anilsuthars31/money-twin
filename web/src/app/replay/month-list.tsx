@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { ArrowRight, PieChart, Play, RotateCcw, Upload } from "lucide-react";
+import { ArrowRight, PieChart, Play, RotateCcw, Upload, Wand2 } from "lucide-react";
 import { inr } from "@/game/engine";
 import { monthLabel } from "@/game/replay/real-month";
-import type { ReplayProgress } from "@/game/replay-progress";
+import { totalWhatIfSaved, type ReplayProgress } from "@/game/replay-progress";
 import { cn } from "@/lib/utils";
 import { GRADE_STYLE } from "../play/demo/report-card";
 
@@ -25,6 +25,7 @@ export function MonthList({
 }) {
   const played = months.filter((m) => progress.months[m.month]).length;
   const upNext = months.find((m) => !progress.months[m.month])?.month;
+  const whatIfTotal = totalWhatIfSaved({ months: Object.fromEntries(months.flatMap((m) => (progress.months[m.month] ? [[m.month, progress.months[m.month]]] : []))) });
 
   return (
     <div className="space-y-3">
@@ -43,6 +44,15 @@ export function MonthList({
             {played} of {months.length} replayed
           </span>
         </div>
+        {whatIfTotal > 0 && (
+          <p className="mt-3 flex items-center gap-2 rounded-2xl bg-goal/10 px-3 py-2 text-sm ring-1 ring-goal/30" data-testid="what-if-total">
+            <Wand2 className="size-4 shrink-0 text-goal" aria-hidden />
+            <span>
+              What-if you has kept <span className="num font-bold text-money">{inr(whatIfTotal)}</span> more across{" "}
+              {played === 1 ? "1 month" : `${played} months`}
+            </span>
+          </p>
+        )}
       </section>
 
       <ol className="relative space-y-2" aria-label="Your months">
@@ -75,6 +85,11 @@ export function MonthList({
                     <span className="num text-foreground">{inr(m.spent)}</span> spent ·{" "}
                     <span className="num text-money">{inr(m.received)}</span> came in
                   </span>
+                  {r?.whatIfSaved ? (
+                    <span className="mt-0.5 flex items-center gap-1 text-xs text-goal">
+                      <Wand2 className="size-3" aria-hidden /> What-if you kept <span className="num font-semibold">{inr(r.whatIfSaved)}</span> more
+                    </span>
+                  ) : null}
                   {m.count < 10 && <span className="mt-0.5 block text-xs text-muted-foreground">Only {m.count} payments saved: part of a month</span>}
                 </span>
                 {r ? (

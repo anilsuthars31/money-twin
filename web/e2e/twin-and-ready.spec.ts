@@ -6,7 +6,7 @@ async function devSignIn(page: Page, email: string) {
   await page.goto("/account");
   await page.getByLabel(/Dev login/).fill(email);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText("What's saved")).toBeVisible();
+  await expect(page.getByText("What's saved")).toBeVisible({ timeout: 15_000 }); // the dev server may be busy compiling
 }
 
 test("a twin made on one device appears on another after signing in", async ({ browser }) => {
@@ -55,7 +55,7 @@ test("playing without an account keeps the twin in this browser only", async ({ 
 test("buttons show as not ready until the page can respond, then work on the first click", async ({ page }) => {
   // Slow the app's JavaScript down so there's a window before the page is interactive.
   await page.route("**/*", async (route) => {
-    if (route.request().resourceType() === "script") await new Promise((r) => setTimeout(r, 1500));
+    if (route.request().resourceType() === "script") await new Promise((r) => setTimeout(r, 3000));
     await route.continue();
   });
   // The upload page's consent checkbox and button are in the server HTML, before JavaScript runs.
@@ -64,8 +64,10 @@ test("buttons show as not ready until the page can respond, then work on the fir
   const choose = page.getByRole("button", { name: /Choose statement/ });
   await choose.waitFor({ state: "attached" });
   expect(await page.evaluate(() => document.documentElement.dataset.hydrated)).toBeUndefined();
-  expect(await consent.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe("none");
-  expect(await choose.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe("none");
+  // The stylesheet may still be arriving: wait for it, while scripts (and so hydration) are held back.
+  await expect.poll(() => consent.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe("none");
+  await expect.poll(() => choose.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe("none");
+  expect(await page.evaluate(() => document.documentElement.dataset.hydrated)).toBeUndefined();
 
   await page.waitForFunction(() => document.documentElement.dataset.hydrated === "true");
   await consent.check(); // one click each is enough
