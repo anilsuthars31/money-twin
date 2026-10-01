@@ -151,7 +151,12 @@ Don't ask for a bank statement first; users won't trust a new app with money dat
       Home "Continue your twin" → `/replay` when real months are saved, demo otherwise.
       Tests: 3 synthetic players in `replay/fixtures.ts` (₹8k student, ₹30k first job, irregular freelancer) must
       get different stories; e2e `e2e/replay.spec.ts` uploads the sample statement and replays August.
-- [ ] Dashboard ("Where your money goes")
+- [x] Dashboard "Where your money goes" at `/dashboard` (signed in; signed out → sign-in): month chips, spent vs last
+      month, Needs / Wants / came in, money lent to friends shown apart (not spending), a Recharts month-by-month
+      stacked bar (tap a bar to pick the month), categories with change vs last month, top payees (nicknames; friends
+      you lent to aren't payees), a "teach your twin" nudge when payees are untaught. Pure, unit-tested data in
+      `web/src/lib/dashboard.ts`, computed in the browser from `/api/transactions` + `/api/overrides` with the same
+      rules as the replay, so the numbers match the report cards. Reached from the home summary and the replay timeline.
 - [ ] Goals, alerts, lessons, budget planner
 - [ ] Account Aggregator sandbox (bonus)
 

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Play, RotateCcw, Upload } from "lucide-react";
+import { ArrowRight, PieChart, Play, RotateCcw, Upload } from "lucide-react";
 import { inr } from "@/game/engine";
 import { monthLabel } from "@/game/replay/real-month";
 import type { ReplayProgress } from "@/game/replay-progress";
@@ -92,6 +92,14 @@ export function MonthList({
         })}
       </ol>
 
+      <Link
+        href="/dashboard"
+        className="flex items-center gap-3 rounded-3xl bg-white/[0.03] p-4 text-sm ring-1 ring-white/5 hover:ring-white/15"
+      >
+        <PieChart className="size-4 text-money" aria-hidden />
+        <span className="flex-1">Where your money goes</span>
+        <ArrowRight className="size-4 text-muted-foreground" aria-hidden />
+      </Link>
       <Link
         href="/upload"
         className="flex items-center gap-3 rounded-3xl bg-white/[0.03] p-4 text-sm ring-1 ring-white/5 hover:ring-white/15"

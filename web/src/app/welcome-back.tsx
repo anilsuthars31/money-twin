@@ -65,15 +65,16 @@ export function WelcomeBack({
           </Link>
           {saved ? (
             <div className="rounded-2xl bg-white/[0.04] p-4 ring-1 ring-white/10">
-              <Link href="/account" className="flex items-center gap-3">
+              <Link href="/dashboard" className="flex items-center gap-3">
                 <CalendarRange className="size-5 shrink-0 text-money" aria-hidden />
                 <span className="min-w-0 flex-1">
                   <span className="block font-semibold">
                     <span className="num">{saved.count.toLocaleString("en-IN")}</span> transactions saved,{" "}
                     {monthRange(saved.from, saved.to)}
                   </span>
-                  <span className="block text-xs text-muted-foreground">Your real months, in your account</span>
+                  <span className="block text-xs text-muted-foreground">See where your money goes</span>
                 </span>
+                <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
               </Link>
               <Link href="/upload" className="mt-3 block text-sm text-money underline-offset-4 hover:underline">
                 Add a newer statement
