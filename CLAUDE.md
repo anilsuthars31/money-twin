@@ -133,11 +133,25 @@ Don't ask for a bank statement first; users won't trust a new app with money dat
       (`friendMode`): only lending counts toward "owes you"; "my share" payments count as spending (Food for small
       lunch/dinner payments, else Entertainment). Money from friends is never income. Who's who includes anyone with
       money going both ways. "Other" for someone who mostly pays you asks "Why do they pay you?" with income reasons
-      (Salary/Stipend, Scholarship, Refund, Sold something, Other income).
+      (Salary/Stipend, Scholarship, Refund, Sold something, Other income). An open, unsaved Other form stays open
+      with a warning if another person is picked.
 - [x] Twin in the account: `twins` collection + `/api/twin`; `TwinSync` merges browser and account copies
       (newest character, union of learned lessons, XP recalculated). Browser-only when signed out.
       Home page shows saved transactions ("51 transactions saved, Jul–Aug 2026").
-- [ ] Replay last 6 months as chapters + dashboard
+- [x] Replay your real past at `/replay` (signed in): every month with saved data is a chapter (`GET /api/months`:
+      spent / came in, India time; grade once played). Plan "If you'd planned this month…" over the real opening
+      balance + income, with a 50/30/20 hint on that month's real income and how it really split. Weeks (1–7, 8–14,
+      15–21, 22–end) replay real payments through the same envelope ledger and grading as the demo, then 1–3 events
+      from a rules library (`web/src/game/replay/templates.ts`, 58 templates + quiet-week fallback; thresholds are
+      fractions of the month's income with a floor, small UPI stays ≤ ₹150; nicknames from Teach your twin).
+      Report card: plan vs actual, spending by real category, friends who owe you, lessons from real habits using
+      real numbers (`lessonContext`). Results only (grade, score, savings kept, end stats, plan) are saved in
+      `money-twin:replay` and the `twins.replay` field (merged across devices: latest result per month); mood
+      carries from the latest earlier month. No player choices in replay (it's the real past).
+      Home "Continue your twin" → `/replay` when real months are saved, demo otherwise.
+      Tests: 3 synthetic players in `replay/fixtures.ts` (₹8k student, ₹30k first job, irregular freelancer) must
+      get different stories; e2e `e2e/replay.spec.ts` uploads the sample statement and replays August.
+- [ ] Dashboard ("Where your money goes")
 - [ ] Goals, alerts, lessons, budget planner
 - [ ] Account Aggregator sandbox (bonus)
 
