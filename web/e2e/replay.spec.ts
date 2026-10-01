@@ -34,12 +34,10 @@ async function uploadSample(page: Page) {
 test("replay a real month: plan, live the weeks, report card, grade on the timeline", async ({ page }) => {
   test.setTimeout(90_000);
   await devSignIn(page, `replay-${Date.now()}@example.com`);
-  await page.evaluate(() =>
-    localStorage.setItem(
-      "money-twin:character",
-      JSON.stringify({ type: "student", name: "Kavya", city: "Pune", avatarSeed: "kavya-1", createdAt: "" }),
-    ),
-  );
+  // The account's twin (comes down to this browser on the next page load).
+  await page.request.put("/api/twin", {
+    data: { character: { type: "student", name: "Kavya", city: "Pune", avatarSeed: "kavya-1", createdAt: "2026-09-01T00:00:00Z" } },
+  });
   await uploadSample(page);
 
   // Home: "Continue your twin" now goes to the replay, and the demo is still there.

@@ -159,6 +159,10 @@ Don't ask for a bank statement first; users won't trust a new app with money dat
       Home "Continue your twin" → `/replay` when real months are saved, demo otherwise.
       The sample statement's July (calm) and August (delivery streak, late-night Amazon, cash) differ on purpose.
       Dev login keeps a typed email as a draft in sessionStorage, so a dev-server reload never clears it.
+      Twin vs account: home shows "Welcome back, <account>" and a separate "Your twin" card with Edit twin (`/edit-twin`,
+      the Create screen in edit mode; keeps progress and look unless shuffled). Signing in: an account with a twin uses
+      it; an account without one asks "Use this twin or create a new one?" (`planSignIn`, the layout passes the user id
+      to TwinSync). Twin names: 2+ letters, no junk (`game/twin-name.ts`, checked on screen and in PUT /api/twin).
       Demo prep: `npm run demo:reset` (dev server running) wipes `live@moneytwin.dev` and re-seeds `demo@moneytwin.dev`
       (sample statement taught, twin Aarav, July replayed), then warms every page. `e2e/demo-flow.spec.ts` clicks the
       whole demo (landing → demo month → sign in → sample → Who's who → cards → save → dashboard → replay with What-ifs).

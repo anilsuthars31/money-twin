@@ -56,3 +56,23 @@ export function mergeTwin(local: TwinCopy, account: TwinCopy) {
     !same(merged.character, side.character) || !same(merged.skills, side.skills) || !same(merged.replay, side.replay);
   return { merged, updateLocal: differs(local), updateAccount: differs(account) };
 }
+
+/** Same twin on both sides (made once, maybe edited since): matched by when it was created, or its look. */
+export const sameTwin = (a: Character, b: Character) => (!!a.createdAt && a.createdAt === b.createdAt) || a.avatarSeed === b.avatarSeed;
+
+/**
+ * What happens when a signed-in account meets the twin in this browser:
+ * - the account has a twin and the browser has another one: the account's twin is used (whole);
+ * - the account has no twin but the browser has one: ask "use this twin or create a new one?";
+ * - otherwise (same twin, or only one side has one): merge as usual.
+ */
+export type SignInPlan =
+  | { kind: "ask"; local: Character }
+  | { kind: "use-account"; account: TwinCopy }
+  | ({ kind: "merge" } & ReturnType<typeof mergeTwin>);
+
+export function planSignIn(local: TwinCopy, account: TwinCopy): SignInPlan {
+  if (local.character && !account.character) return { kind: "ask", local: local.character };
+  if (local.character && account.character && !sameTwin(local.character, account.character)) return { kind: "use-account", account };
+  return { kind: "merge", ...mergeTwin(local, account) };
+}

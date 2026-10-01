@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { DEFAULT_CONTEXT } from "./lessons";
 import type { SkillBook } from "./skills";
 import type { Character } from "./types";
-import { mergeTwin, xpFor } from "./twin-merge";
+import { mergeTwin, planSignIn, xpFor } from "./twin-merge";
 
 const char = (name: string, updatedAt: string): Character => ({
   type: "student",
@@ -61,5 +61,36 @@ describe("merging the twin across devices", () => {
     const r = mergeTwin(twin, structuredClone(twin));
     expect(r.updateLocal).toBe(false);
     expect(r.updateAccount).toBe(false);
+  });
+});
+
+describe("signing in with a twin in the browser", () => {
+  const kavya = char("Kavya", "2026-09-10T10:00:00Z");
+  const other: Character = { ...char("Rohan", "2026-09-12T10:00:00Z"), avatarSeed: "rohan-1", createdAt: "2026-09-12T09:00:00Z" };
+
+  test("account has no twin, browser has one: ask first", () => {
+    const plan = planSignIn({ character: kavya, skills: null }, { character: null, skills: null });
+    expect(plan).toEqual({ kind: "ask", local: kavya });
+  });
+
+  test("account already has a twin: the account's twin wins, even if the browser's is newer", () => {
+    const account = { character: kavya, skills: book({ impulse: { correct: true, at: "2026-09-10T10:00:00Z" } }, "2026-09-10T10:00:00Z") };
+    const plan = planSignIn({ character: other, skills: book({ delivery: { correct: true, at: "2026-09-12T10:00:00Z" } }, "2026-09-12T10:00:00Z") }, account);
+    expect(plan).toEqual({ kind: "use-account", account });
+  });
+
+  test("the same twin on both sides is merged as before (an edit on this device wins)", () => {
+    const renamed = { ...kavya, name: "Kavya R", updatedAt: "2026-09-15T10:00:00Z" };
+    const plan = planSignIn({ character: renamed, skills: null }, { character: kavya, skills: null });
+    expect(plan.kind).toBe("merge");
+    if (plan.kind === "merge") {
+      expect(plan.merged.character?.name).toBe("Kavya R");
+      expect(plan.updateAccount).toBe(true);
+    }
+  });
+
+  test("no twin in the browser: the account's twin comes down", () => {
+    const plan = planSignIn({ character: null, skills: null }, { character: kavya, skills: null });
+    expect(plan).toMatchObject({ kind: "merge", updateLocal: true, merged: { character: kavya } });
   });
 });

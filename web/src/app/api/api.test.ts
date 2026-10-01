@@ -357,6 +357,12 @@ describe.skipIf(!mongoUp)("API routes (local MongoDB)", () => {
     expect((await twinRoute.PUT(req("/api/twin", "PUT", { character: { ...TWIN_CHARACTER, type: "wizard" } }))).status).toBe(400);
     expect((await twinRoute.PUT(req("/api/twin", "PUT", { skills: { xp: 10, learned: { hacking: { correct: true, at: "" } } } }))).status).toBe(400);
     expect((await twinRoute.PUT(req("/api/twin", "PUT", { character: TWIN_CHARACTER, password: "x" }))).status).toBe(400);
+    // Junk names are refused here too, not only on the Create screen.
+    for (const name of ["", "x", "klsdjfj", "12345"]) {
+      expect((await twinRoute.PUT(req("/api/twin", "PUT", { character: { ...TWIN_CHARACTER, name } }))).status, name).toBe(400);
+    }
+    const tidy = await twinRoute.PUT(req("/api/twin", "PUT", { character: { ...TWIN_CHARACTER, name: "  Kavya   R " } }));
+    expect((await tidy.json()).twin.character.name).toBe("Kavya R");
 
     await twinRoute.PUT(req("/api/twin", "PUT", { character: TWIN_CHARACTER }));
     signInAs(bob);

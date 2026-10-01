@@ -31,6 +31,15 @@ export function applyCharacter(c: Character) {
   listeners.forEach((l) => l());
 }
 
+/** Forgets the twin in this browser (the account copy, if any, is untouched). */
+export function clearCharacter() {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {}
+  cachedRaw = undefined;
+  listeners.forEach((l) => l());
+}
+
 let cachedRaw: string | null | undefined;
 let cached: Character | null = null;
 

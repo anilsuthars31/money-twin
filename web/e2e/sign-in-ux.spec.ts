@@ -49,7 +49,7 @@ test("signed in: Welcome back, Continue your twin, and an avatar in the header",
   await expect(page).toHaveURL(/localhost:3000\/$/);
 
   const firstName = email.split("@")[0];
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(`Welcome back, ${firstName}`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(`Welcome back, W${firstName.slice(1)}`); // capitalised
   await expect(page.getByText("Meet the version of you")).toHaveCount(0);
   await expect(page.getByRole("link", { name: /Continue your twin/ })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in" })).toHaveCount(0);
@@ -71,7 +71,9 @@ test("Continue your twin goes to the demo when a twin exists, to create otherwis
     ),
   );
   await page.reload();
-  await expect(page.getByText("Kavya is ready for another month in Pune.")).toBeVisible();
+  // The account has no twin and this browser has one: asked first, never attached silently.
+  await page.getByRole("button", { name: "Use Kavya" }).click();
+  await expect(page.getByRole("region", { name: "Your twin" })).toContainText("Kavya is ready for another month in Pune.");
   await expect(page.getByRole("link", { name: /Continue your twin/ })).toHaveAttribute("href", "/play/demo");
   await cleanUp(page);
 });

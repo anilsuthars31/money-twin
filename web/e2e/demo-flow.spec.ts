@@ -48,6 +48,13 @@ test("the full demo flow for a new account", async ({ page }) => {
   await page.getByLabel(/Dev login/).fill(`flow-${Date.now()}@example.com`);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByText("What's saved")).toBeVisible({ timeout: 15_000 });
+  // The new account has no twin: asked whether the one made before signing in becomes theirs.
+  await expect(page.getByRole("dialog", { name: "Use this twin or create a new one?" })).toBeVisible();
+  await shot(page, "03b-use-this-twin");
+  const saved = page.waitForResponse((r) => r.url().endsWith("/api/twin") && r.request().method() === "PUT");
+  await page.getByRole("button", { name: "Use Aarav" }).click();
+  await saved;
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
   // Upload: privacy screen first, then the bundled sample.
   await page.goto("/upload");

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
+import { auth } from "@/auth";
 import { HydrationMarker } from "@/components/app/hydration-marker";
 import { TwinSync } from "@/game/twin-sync";
 import "./globals.css";
@@ -30,7 +31,9 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Who's signed in, for TwinSync. Signing in or out changes the cookie, so this re-renders.
+  const session = await auth().catch(() => null);
   return (
     <html
       lang="en-IN"
@@ -39,7 +42,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <HydrationMarker />
-        <TwinSync />
+        <TwinSync userId={session?.user?.id ?? null} />
         {children}
       </body>
     </html>

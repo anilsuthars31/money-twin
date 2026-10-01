@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { LESSON_ORDER } from "@/game/lessons";
+import { cleanTwinName, twinNameProblem } from "@/game/twin-name";
 import { ALL_CATEGORIES, FRIEND_MODES } from "@/lib/categories";
 import { connectDb } from "@/lib/db";
 import { User } from "@/models/User";
@@ -116,7 +117,13 @@ export const twinBody = z
     character: z
       .object({
         type: z.enum(["student", "first-job", "professional"]),
-        name: z.string().trim().min(1).max(20),
+        name: z
+          .string()
+          .transform(cleanTwinName)
+          .superRefine((n, ctx) => {
+            const problem = twinNameProblem(n);
+            if (problem) ctx.addIssue({ code: "custom", message: problem });
+          }),
         city: z.string().trim().min(1).max(40),
         avatarSeed: z.string().min(1).max(80),
         createdAt: isoish.default(""),

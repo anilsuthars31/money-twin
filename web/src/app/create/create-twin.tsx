@@ -11,7 +11,8 @@ import { TwinAvatar } from "@/components/twin/avatar";
 import { StatBars } from "@/components/twin/stat-bars";
 import { CHARACTER_TYPES, saveCharacter } from "@/game/character";
 import { STARTING_MOOD } from "@/game/engine";
-import type { CharacterType } from "@/game/types";
+import { TWIN_NAME_MAX, cleanTwinName, twinNameProblem } from "@/game/twin-name";
+import type { Character, CharacterType } from "@/game/types";
 import { cn } from "@/lib/utils";
 
 gsap.registerPlugin(useGSAP);
@@ -24,17 +25,27 @@ const TYPE_ICON: Record<CharacterType, LucideIcon> = {
 
 const CITIES = ["Bengaluru", "Mumbai", "Delhi", "Hyderabad", "Pune", "Chennai", "Kolkata", "Jaipur"];
 
-export function CreateTwin() {
+/**
+ * Create a twin, or edit the one you have (`initial`): name, city, life stage and look. Editing keeps
+ * the twin's progress and its look unless you shuffle; changes are saved to the account when signed in.
+ */
+export function CreateTwin({ initial }: { initial?: Character } = {}) {
   const router = useRouter();
   const root = useRef<HTMLDivElement>(null);
-  const [type, setType] = useState<CharacterType>("student");
-  const [name, setName] = useState("");
-  const [city, setCity] = useState("Bengaluru");
+  const editing = !!initial;
+  const [type, setType] = useState<CharacterType>(initial?.type ?? "student");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [city, setCity] = useState(initial?.city ?? "Bengaluru");
   const [look, setLook] = useState(1);
+  const [keptSeed, setKeptSeed] = useState(initial?.avatarSeed); // the current look, until shuffled
+  const [touched, setTouched] = useState(false);
 
-  const seed = `${name.trim().toLowerCase() || "twin"}-${look}`;
+  const seed = keptSeed ?? `${cleanTwinName(name).toLowerCase() || "twin"}-${look}`;
   const stats = { savings: 50, ...STARTING_MOOD[type], goal: 0 };
-  const ready = name.trim().length > 0 && city.trim().length > 0;
+  const problem = twinNameProblem(name);
+  const ready = !problem && city.trim().length > 0;
+  const showProblem = problem && (touched || (editing && name !== initial?.name));
+  const cities = initial && !CITIES.includes(initial.city) ? [initial.city, ...CITIES] : CITIES;
 
   useGSAP(
     () => {
@@ -46,14 +57,22 @@ export function CreateTwin() {
   );
 
   const shuffle = () => {
+    setKeptSeed(undefined);
     setLook((n) => n + 1);
     gsap.fromTo("[data-avatar]", { rotate: -8, scale: 0.92 }, { rotate: 0, scale: 1, duration: 0.5, ease: "back.out(2.5)" });
   };
 
   const start = () => {
+    setTouched(true);
     if (!ready) return;
-    saveCharacter({ type, name: name.trim(), city: city.trim(), avatarSeed: seed, createdAt: new Date().toISOString() });
-    router.push("/play/demo");
+    const twin = { type, name: cleanTwinName(name), city: city.trim(), avatarSeed: seed };
+    if (initial) {
+      saveCharacter({ ...initial, ...twin }); // same twin (createdAt kept), so its progress stays
+      router.push("/");
+    } else {
+      saveCharacter({ ...twin, createdAt: new Date().toISOString() });
+      router.push("/play/demo");
+    }
   };
 
   return (
@@ -62,7 +81,7 @@ export function CreateTwin() {
         <Link href="/" className="grid size-10 place-items-center rounded-full hover:bg-white/5" aria-label="Back">
           <ArrowLeft className="size-5" />
         </Link>
-        <h1 className="text-lg font-semibold">Create your twin</h1>
+        <h1 className="text-lg font-semibold">{editing ? "Edit your twin" : "Create your twin"}</h1>
       </header>
 
       {/* Preview: the character is always centred */}
@@ -82,7 +101,7 @@ export function CreateTwin() {
             </button>
           </div>
           <div className="mt-3 text-center">
-            <div className="font-display text-2xl font-bold">{name.trim() || "Your twin"}</div>
+            <div className="font-display text-2xl font-bold">{cleanTwinName(name) || "Your twin"}</div>
             <div className="mt-0.5 flex items-center justify-center gap-1 text-sm text-muted-foreground">
               <MapPin className="size-3.5" />
               {city || "Somewhere in India"} · {CHARACTER_TYPES.find((t) => t.type === type)!.label}
@@ -126,12 +145,21 @@ export function CreateTwin() {
         <input
           id="twin-name"
           value={name}
-          onChange={(e) => setName(e.target.value.slice(0, 20))}
+          onChange={(e) => setName(e.target.value.slice(0, TWIN_NAME_MAX + 5))}
+          onBlur={() => name && setTouched(true)}
           onKeyDown={(e) => e.key === "Enter" && start()}
           placeholder="What should we call them?"
           autoComplete="off"
-          className="h-14 w-full rounded-2xl bg-card px-4 text-lg ring-1 ring-white/5 outline-none placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-money/60"
+          aria-invalid={!!showProblem}
+          aria-describedby="twin-name-help"
+          className={cn(
+            "h-14 w-full rounded-2xl bg-card px-4 text-lg ring-1 ring-white/5 outline-none placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-money/60",
+            showProblem && "ring-alert/70 focus:ring-alert/70",
+          )}
         />
+        <p id="twin-name-help" className={cn("mt-2 text-xs", showProblem ? "text-alert" : "text-muted-foreground")} aria-live="polite">
+          {showProblem ? problem : "A real name, 2 or more letters."}
+        </p>
       </section>
 
       <section data-rise className="mt-6">
@@ -147,7 +175,7 @@ export function CreateTwin() {
           role="radiogroup"
           aria-label="City"
         >
-          {CITIES.map((c) => (
+          {cities.map((c) => (
             <button
               key={c}
               type="button"
@@ -167,10 +195,12 @@ export function CreateTwin() {
 
       <div className="mt-auto pt-8">
         <Button size="xl" className="w-full" disabled={!ready} onClick={start}>
-          Start the demo month <ArrowRight data-icon="inline-end" />
+          {editing ? "Save changes" : "Start the demo month"} <ArrowRight data-icon="inline-end" />
         </Button>
         <p className="mt-3 text-center text-xs text-muted-foreground">
-          Your twin is saved on this device only.
+          {editing
+            ? "Your twin keeps its XP, skills and replayed months. Saved to your account when you're signed in."
+            : "Your twin is saved on this device, and in your account when you're signed in."}
         </p>
       </div>
     </div>

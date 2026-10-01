@@ -1,15 +1,26 @@
 "use client";
 
-import { useEffect } from "react";
-import { applyCharacter, readCharacter, subscribeCharacter } from "./character";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { TwinChoice } from "@/components/twin/twin-choice";
+import { applyCharacter, clearCharacter, readCharacter, subscribeCharacter } from "./character";
 import { DEFAULT_CONTEXT } from "./lessons";
-import { applyReplay, readReplay, subscribeReplay, type ReplayProgress } from "./replay-progress";
-import { applySkills, readSkills, subscribeSkills, type SkillBook } from "./skills";
-import { mergeTwin, type TwinCopy } from "./twin-merge";
+import { applyReplay, clearReplay, readReplay, subscribeReplay, type ReplayProgress } from "./replay-progress";
+import { applySkills, clearSkills, readSkills, subscribeSkills, type SkillBook } from "./skills";
+import { twinNameProblem } from "./twin-name";
+import { mergeTwin, planSignIn, type TwinCopy } from "./twin-merge";
+import type { Character } from "./types";
 
 // Keeps the twin (character, XP, skills, replayed months) in the player's account when they're
-// signed in, so it follows them across devices. Signed out, it does nothing and the browser copy
-// is all there is.
+// signed in, so it follows them across devices. Signed out, the browser copy is all there is.
+//
+// When an account meets the twin in this browser (see planSignIn):
+// - the account's own twin always wins over a different one in the browser;
+// - an account with no twin asks before taking the browser's ("Use this twin or create a new one?");
+// - the same twin on both sides is merged.
+// The layout passes the signed-in account (it re-renders when signing in or out changes the
+// cookie), so switching accounts in one tab never attaches one person's twin to another's account.
+// Checks run one at a time and are never abandoned half-way.
 
 const SAVE_DELAY = 800; // ms: batch quick changes (e.g. several lessons) into one save
 
@@ -36,7 +47,7 @@ async function saveToAccount(twin: TwinCopy) {
       replay: twin.replay ?? undefined,
     }),
     keepalive: true, // finish even if the player navigates away
-  });
+  }).catch(() => {});
 }
 
 interface AccountTwin {
@@ -45,47 +56,102 @@ interface AccountTwin {
   replay?: ReplayProgress | null;
 }
 
-export function TwinSync() {
-  useEffect(() => {
-    let cancelled = false;
-    let applying = false; // writes that came from the account shouldn't be sent straight back
-    let timer: number | undefined;
-    let unsubscribe = () => {};
+export function TwinSync({ userId }: { userId: string | null }) {
+  const router = useRouter();
+  const [ask, setAsk] = useState<{ local: Character; account: TwinCopy } | null>(null);
+  const state = useRef({
+    user: undefined as string | null | undefined,
+    stop: () => {},
+    applying: false,
+    timer: 0,
+    chain: Promise.resolve(),
+  });
 
-    (async () => {
+  /** Writes a twin into this browser without sending it straight back to the account. */
+  const applyLocal = (twin: TwinCopy) => {
+    const s = state.current;
+    s.applying = true;
+    if (twin.character) applyCharacter(twin.character);
+    else clearCharacter();
+    if (twin.skills) applySkills(twin.skills);
+    else clearSkills();
+    if (twin.replay) applyReplay(twin.replay);
+    else clearReplay();
+    s.applying = false;
+  };
+
+  /** From now on, changes made in this browser are saved to the account. */
+  const follow = () => {
+    const s = state.current;
+    const onChange = () => {
+      if (s.applying) return;
+      window.clearTimeout(s.timer);
+      s.timer = window.setTimeout(() => void saveToAccount(localTwin()), SAVE_DELAY);
+    };
+    const offs = [subscribeCharacter(onChange), subscribeSkills(onChange), subscribeReplay(onChange)];
+    s.stop = () => {
+      window.clearTimeout(s.timer);
+      offs.forEach((off) => off());
+    };
+  };
+
+  useEffect(() => {
+    const s = state.current;
+    const check = async () => {
+      if (userId === s.user) return;
+      // Signed in, out, or as someone else: start over for this account.
+      s.stop();
+      s.stop = () => {};
+      s.user = userId;
+      setAsk(null);
+      if (!userId) return;
+
+      const before = localTwin(); // what this browser had when this account showed up
       const res = await fetch("/api/twin").catch(() => null);
-      if (!res?.ok || cancelled) return; // signed out (401), offline, or the database is down
+      if (!res?.ok) {
+        s.user = undefined; // offline, or the database is down: try again next time
+        return;
+      }
       const body = (await res.json()) as { twin: AccountTwin | null };
       const account: TwinCopy = {
         character: body.twin?.character ?? null,
         skills: body.twin?.skills ? { ...body.twin.skills, context: body.twin.skills.context ?? DEFAULT_CONTEXT } : null,
         replay: body.twin?.replay ?? null,
       };
-      const { merged, updateLocal, updateAccount } = mergeTwin(localTwin(), account);
-      if (updateLocal) {
-        applying = true;
-        if (merged.character) applyCharacter(merged.character);
-        if (merged.skills) applySkills(merged.skills);
-        if (merged.replay) applyReplay(merged.replay);
-        applying = false;
+      // A twin made while this check was running was made signed in: it's simply this account's.
+      const local = localTwin();
+      const madeMeanwhile = !before.character && !!local.character;
+      const plan = madeMeanwhile ? ({ kind: "merge", ...mergeTwin(local, account) } as const) : planSignIn(local, account);
+      if (plan.kind === "ask") return setAsk({ local: plan.local, account });
+      if (plan.kind === "use-account") applyLocal(plan.account);
+      else {
+        if (plan.updateLocal) applyLocal(plan.merged);
+        if (plan.updateAccount) await saveToAccount(plan.merged);
       }
-      if (updateAccount) await saveToAccount(merged);
-      if (cancelled) return;
-
-      const onChange = () => {
-        if (applying) return;
-        window.clearTimeout(timer);
-        timer = window.setTimeout(() => void saveToAccount(localTwin()), SAVE_DELAY);
-      };
-      const offs = [subscribeCharacter(onChange), subscribeSkills(onChange), subscribeReplay(onChange)];
-      unsubscribe = () => offs.forEach((off) => off());
-    })();
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-      unsubscribe();
+      follow();
     };
-  }, []);
-  return null;
+    s.chain = s.chain.then(check).catch(() => {});
+  }, [userId]);
+
+  useEffect(() => () => state.current.stop(), []);
+
+  if (!ask) return null;
+  return (
+    <TwinChoice
+      twin={ask.local}
+      onKeep={async () => {
+        const { merged } = mergeTwin(localTwin(), ask.account);
+        setAsk(null);
+        await saveToAccount(merged);
+        follow();
+        if (twinNameProblem(ask.local.name)) router.push("/edit-twin"); // a junk name has to be fixed to save
+      }}
+      onNew={() => {
+        applyLocal({ character: null, skills: ask.account.skills, replay: ask.account.replay });
+        setAsk(null);
+        follow();
+        router.push("/create");
+      }}
+    />
+  );
 }

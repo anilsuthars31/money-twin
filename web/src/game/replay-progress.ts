@@ -61,6 +61,16 @@ export function applyReplay(p: ReplayProgress) {
   listeners.forEach((l) => l());
 }
 
+/** Forgets replay progress in this browser (the account copy, if any, is untouched). */
+export function clearReplay() {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {}
+  cached = EMPTY;
+  cachedRaw = undefined;
+  listeners.forEach((l) => l());
+}
+
 /** Records a replayed month. Playing it again replaces the old result. */
 export function saveMonthResult(key: string, result: Omit<MonthResult, "playedAt">) {
   const p = readReplay();

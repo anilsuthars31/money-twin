@@ -67,6 +67,16 @@ function write(book: SkillBook) {
   applySkills({ ...book, updatedAt: new Date().toISOString() });
 }
 
+/** Forgets the skill book in this browser, without stamping it as a change (nothing to sync). */
+export function clearSkills() {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {}
+  cached = EMPTY;
+  cachedRaw = undefined;
+  listeners.forEach((l) => l());
+}
+
 export function resetSkills() {
   write(EMPTY);
 }

@@ -10,9 +10,10 @@ export default async function Home() {
   const accountLink = <AccountLink session={session} from="/" />;
   if (session?.user) {
     const name = session.user.name || session.user.email?.split("@")[0] || "there";
+    const first = name.split(" ")[0];
     // If the database is unreachable, still show the page, just without the saved summary.
     const saved = await savedRange(session.user.id).catch(() => null);
-    return <WelcomeBack firstName={name.split(" ")[0]} accountLink={accountLink} saved={saved} />;
+    return <WelcomeBack firstName={first.charAt(0).toUpperCase() + first.slice(1)} accountLink={accountLink} saved={saved} />;
   }
   return <Landing accountLink={accountLink} />;
 }

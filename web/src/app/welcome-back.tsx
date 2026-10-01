@@ -2,16 +2,13 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ArrowRight, BookOpen, CalendarRange, ShieldCheck } from "lucide-react";
+import { ArrowRight, BookOpen, CalendarRange, MapPin, Pencil, ShieldCheck, TriangleAlert } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { TwinAvatar } from "@/components/twin/avatar";
-import { useCharacter } from "@/game/character";
+import { CHARACTER_TYPES, useCharacter } from "@/game/character";
+import { twinNameProblem } from "@/game/twin-name";
 import { cn } from "@/lib/utils";
 
-/**
- * The landing page for someone who's signed in: no marketing hero, just a way back to their twin.
- * The twin itself lives on this device, so it's read on the client; the greeting comes from the server.
- */
 /** "Jul–Aug 2026", or "Sep 2024 – Apr 2026" across years. */
 export function monthRange(fromIso: string, toIso: string): string {
   const from = new Date(fromIso);
@@ -21,6 +18,12 @@ export function monthRange(fromIso: string, toIso: string): string {
   return m(from) === m(to) ? `${m(from)} ${to.getFullYear()}` : `${m(from)}–${m(to)} ${to.getFullYear()}`;
 }
 
+/**
+ * The landing page for someone who's signed in: no marketing hero, just a way back to their twin.
+ * Two different things, kept visibly apart: the account ("Welcome back, Anil", avatar in the header)
+ * and the twin (the character you play, with its own name and avatar, and an Edit twin link).
+ * The twin is read on the client; the greeting comes from the server.
+ */
 export function WelcomeBack({
   firstName,
   accountLink,
@@ -43,17 +46,56 @@ export function WelcomeBack({
       </header>
 
       <main className="flex flex-1 flex-col justify-center pb-16">
-        <div className="flex flex-col items-center text-center">
-          <TwinAvatar seed={twin?.avatarSeed ?? `welcome-${firstName}`} className="size-32" />
-          <h1 className="mt-6 text-4xl font-bold leading-tight text-balance">Welcome back, {firstName}</h1>
-          <p className="mt-3 max-w-xs text-muted-foreground text-pretty">
-            {twin === undefined
-              ? " "
-              : hasTwin
-                ? `${twin.name} is ready for another month in ${twin.city}.`
-                : "Create your twin on this device to start playing."}
-          </p>
-        </div>
+        <h1 className="text-4xl font-bold leading-tight text-balance">Welcome back, {firstName}</h1>
+
+        <section aria-label="Your twin" className="mt-6 rounded-3xl bg-card p-5 ring-1 ring-white/5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-money">Your twin</h2>
+            {hasTwin && (
+              <Link
+                href="/edit-twin"
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold text-muted-foreground hover:bg-white/5 hover:text-foreground"
+              >
+                <Pencil className="size-3.5" aria-hidden /> Edit twin
+              </Link>
+            )}
+          </div>
+          {twin === undefined ? (
+            <div className="mt-3 h-20 animate-pulse rounded-2xl bg-white/[0.04]" aria-hidden />
+          ) : twin ? (
+            <>
+              <div className="mt-3 flex items-center gap-4">
+                <TwinAvatar seed={twin.avatarSeed} className="size-20" />
+                <div className="min-w-0">
+                  <div className="truncate font-display text-2xl font-bold">{twin.name}</div>
+                  <div className="mt-0.5 flex items-center gap-1 text-sm text-muted-foreground">
+                    <MapPin className="size-3.5 shrink-0" aria-hidden />
+                    <span className="truncate">
+                      {twin.city} · {CHARACTER_TYPES.find((t) => t.type === twin.type)?.label}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <p className="mt-3 text-sm text-muted-foreground text-pretty">
+                {twin.name} is ready for another month in {twin.city}.
+              </p>
+              {twinNameProblem(twin.name) && (
+                <Link
+                  href="/edit-twin"
+                  className="mt-3 flex items-center gap-2 rounded-2xl bg-alert/10 p-3 text-sm ring-1 ring-alert/30 hover:bg-alert/15"
+                >
+                  <TriangleAlert className="size-4 shrink-0 text-alert" aria-hidden />
+                  <span className="flex-1">Give your twin a real name so it can be saved to your account.</span>
+                  <ArrowRight className="size-4 text-muted-foreground" aria-hidden />
+                </Link>
+              )}
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground text-pretty">
+              No twin on this device yet. Create one to start playing.
+            </p>
+          )}
+        </section>
 
         <div className="mt-8 space-y-3">
           {/* Real months saved → replay them; otherwise the demo month (or make a twin first). */}
