@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { LESSON_ORDER } from "@/game/lessons";
 import { ALL_CATEGORIES, FRIEND_MODES } from "@/lib/categories";
 import { connectDb } from "@/lib/db";
+import { User } from "@/models/User";
 
 // Shared bits for API route handlers: who's asking, input validation, consistent errors.
 
@@ -23,6 +24,9 @@ export async function requireUserId(): Promise<Types.ObjectId> {
   const id = session?.user?.id;
   if (!id || !Types.ObjectId.isValid(id)) throw new HttpError(401, "Sign in first.");
   await connectDb();
+  // A deleted account's session cookie can outlive it (and a save already on its way can land after
+  // "Delete all my data"): never write data for an account that no longer exists.
+  if (!(await User.exists({ _id: id }))) throw new HttpError(401, "This account no longer exists. Sign in again.");
   return new Types.ObjectId(id);
 }
 

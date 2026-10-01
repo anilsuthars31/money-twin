@@ -210,6 +210,13 @@ describe.skipIf(!mongoUp)("API routes (local MongoDB)", () => {
     expect(await MerchantOverride.countDocuments({ userId: alice })).toBe(0);
     expect(await User.findById(alice)).toBeNull();
     expect(await User.findById(bob)).not.toBeNull();
+
+    // A save still on its way (the twin syncs a moment after a change) can't bring data back.
+    const late = await twinRoute.PUT(req("/api/twin", "PUT", { character: TWIN_CHARACTER }));
+    expect(late.status).toBe(401);
+    expect((await txns.POST(req("/api/transactions", "POST", { transactions: [txn(3)] }))).status).toBe(401);
+    expect(await Twin.countDocuments({ userId: alice })).toBe(0);
+    expect(await Transaction.countDocuments({ userId: alice })).toBe(0);
   });
 
   test("payee nicknames are saved, kept when omitted, and removed with null", async () => {
