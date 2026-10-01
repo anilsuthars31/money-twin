@@ -231,11 +231,12 @@ describe("Who's who: friends, me, and others", () => {
   test("friends are splits and loans: netted per friend, not income or spending", async () => {
     const txns = await load();
     // In the sample: each month you pay Arjun ₹650 + ₹420 and he pays you ₹300; Sunita only sends money.
-    const labelled = applyLabels(txns, { arjunp: "Friend", sunitadevi: "Friend" });
+    // Arjun: lending, and he's paying you back. Sunita: you borrowed from her.
+    const labelled = applyLabels(txns, { arjunp: "Friend", sunitadevi: "Friend" }, { arjunp: "lend" }, { arjunp: "payback", sunitadevi: "borrowed" });
     const { friends, owedToYou, youOwe } = friendBalances(labelled);
-    expect(friends).toEqual([
-      { key: "sunitadevi", name: "Sunita Devi", net: -3000 },
-      { key: "arjunp", name: "Arjun P", net: 1540 },
+    expect(friends).toMatchObject([
+      { key: "sunitadevi", name: "Sunita Devi", borrowed: 3000, net: -3000 },
+      { key: "arjunp", name: "Arjun P", lent: 2140, paidBack: 600, net: 1540 },
     ]);
     expect(owedToYou).toBe(1540);
     expect(youOwe).toBe(3000);
@@ -295,8 +296,8 @@ describe("friends: lending vs my share, and people who pay you", () => {
     const lend = applyLabels(txns, labels, { arjunp: "lend" });
     const share = applyLabels(txns, labels, { arjunp: "share" });
 
-    expect(friendBalances(lend, {}, { arjunp: "lend" }).owedToYou).toBe(1540);
-    expect(friendBalances(share, {}, { arjunp: "share" })).toEqual({ friends: [], owedToYou: 0, youOwe: 0 });
+    expect(friendBalances(lend).owedToYou).toBe(1540);
+    expect(friendBalances(share)).toEqual({ friends: [], owedToYou: 0, youOwe: 0 }); // his ₹300s can't make you owe him
 
     const arjunOut = share.filter((t) => t.counterparty === "Arjun P" && t.type === "DR");
     expect(arjunOut.map((t) => t.category)).toEqual(["Entertainment", "Entertainment", "Entertainment", "Entertainment"]);

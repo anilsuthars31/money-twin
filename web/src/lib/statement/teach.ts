@@ -1,5 +1,6 @@
-import { TEACH_CATEGORIES, payeeKey, type TeachCategory } from "@/lib/categories";
-import { looksLikePerson, type Categorised, type FriendModes, type Labels } from "./rules";
+import { BORROWED_FROM_FRIEND, FRIEND_THEIR_SHARE, TEACH_CATEGORIES, payeeKey, type TeachCategory } from "@/lib/categories";
+import { netFriends } from "@/lib/friends";
+import { looksLikePerson, type Categorised, type Labels } from "./rules";
 
 // "Teach your twin": which payees to ask about, what to show on each card, and which six
 // categories to offer first. Plain heuristics over the player's own transactions.
@@ -8,7 +9,7 @@ import { looksLikePerson, type Categorised, type FriendModes, type Labels } from
  * Money that isn't really income or spending: internal bank moves, transfers between your own
  * accounts ("Me"), and friend splits/loans (netted per friend instead, see friendBalances).
  */
-export const NOT_INCOME_OR_SPENDING = new Set(["Internal (ignore)", "Self Transfer", "Friend"]);
+export const NOT_INCOME_OR_SPENDING = new Set(["Internal (ignore)", "Self Transfer", "Friend", FRIEND_THEIR_SHARE, BORROWED_FROM_FRIEND]);
 
 const spend = (t: Categorised) => t.type === "DR" && !NOT_INCOME_OR_SPENDING.has(t.category);
 const sum = (ts: Categorised[]) => ts.reduce((s, t) => s + t.amount, 0);
@@ -53,25 +54,16 @@ export interface FriendBalance {
 }
 
 /**
- * Money lent to friends: per friend, what you lent them minus what they paid you. Positive means
- * they owe you. Friends marked "my share" aren't here: what you paid them is your own spending.
+ * Money with friends, per friend (labelled transactions in, see src/lib/friends.ts): what you lent
+ * minus what they paid back (never below zero), minus what you borrowed from them. Positive: they
+ * owe you; negative: you owe them. "My share" / "their share" money isn't a loan, so it's not here.
  */
-export function friendBalances(txns: Categorised[], nicknames: Record<string, string> = {}, modes: FriendModes = {}) {
-  const byKey = new Map<string, FriendBalance>();
-  for (const t of txns) {
-    if (t.category !== "Friend") continue;
-    const key = payeeKey(t.counterparty);
-    if (modes[key] === "share") continue;
-    const b = byKey.get(key) ?? { key, name: nicknames[key] ?? t.counterparty, net: 0 };
-    b.net += t.type === "DR" ? t.amount : -t.amount;
-    byKey.set(key, b);
-  }
-  const friends = [...byKey.values()].filter((b) => Math.round(b.net) !== 0).sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
-  return {
-    friends,
-    owedToYou: friends.reduce((s, f) => s + Math.max(0, f.net), 0),
-    youOwe: friends.reduce((s, f) => s + Math.max(0, -f.net), 0),
-  };
+export function friendBalances(txns: Categorised[], nicknames: Record<string, string> = {}): {
+  friends: FriendBalance[];
+  owedToYou: number;
+  youOwe: number;
+} {
+  return netFriends(txns, (c) => nicknames[payeeKey(c)] ?? c);
 }
 
 /** The name to show for a payee: the player's nickname ("Gym trainer") or the statement name. */

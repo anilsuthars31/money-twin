@@ -76,6 +76,7 @@ test("sample statement: read on the device, taught, saved, and the raw file is n
   await page.getByRole("radio", { name: "Sunita Devi: Family" }).click(); // unmarked people would come first in the cards
   await page.getByRole("radio", { name: "Arjun P: Friend" }).click();
   await page.getByRole("radio", { name: "Lending to them" }).click();
+  await page.getByRole("radio", { name: "Paying me back" }).click();
   await page.getByRole("button", { name: /who are the rest/ }).click();
 
   // Cards: six category buttons, the rest under "More".
@@ -136,6 +137,7 @@ test("signed out: asks to sign in right before saving, then carries on", async (
   await page.getByRole("radio", { name: "Sunita Devi: Family" }).click(); // unmarked people would come first in the cards
   await page.getByRole("radio", { name: "Arjun P: Friend" }).click();
   await page.getByRole("radio", { name: "Lending to them" }).click();
+  await page.getByRole("radio", { name: "Paying me back" }).click();
   await page.getByRole("button", { name: /who are the rest/ }).click();
   await page.getByRole("button", { name: "Shanthi Pg is Rent/PG (likely)" }).click();
   await page.getByRole("button", { name: "Finish later and review" }).click();
@@ -189,11 +191,13 @@ test.describe("real statements (local only)", () => {
     if (await page.getByRole("button", { name: /who are the rest/ }).isVisible()) {
       await page.getByRole("button", { name: /who are the rest/ }).click();
     }
-    // Answer five cards with their "Likely" category (and, for friends, the lending-or-share question).
+    // Answer five cards with their "Likely" category (and, for friends, what the money was each way).
     for (let i = 0; i < 5; i++) {
       await page.getByRole("button", { name: /\(likely\)$/ }).click();
       const lend = page.getByRole("radio", { name: /Lending to them/ });
       if (await lend.isVisible()) await lend.click();
+      const back = page.getByRole("radio", { name: /Paying me back/ });
+      if (await back.isVisible()) await back.click();
       await page.waitForTimeout(250);
     }
     await page.getByRole("button", { name: "Finish later and review" }).click();

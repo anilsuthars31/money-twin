@@ -3,7 +3,7 @@ import { DEFAULT_PLAN } from "../engine";
 import { ledgerFromAmounts } from "../ledger";
 import type { CharacterType } from "../types";
 import { firstJob, freelancer, hostelStudent } from "./fixtures";
-import { buildRealMonth, monthMoney, weeksOf, type RealMonth } from "./real-month";
+import { buildRealMonth, monthMoney, weeksOf, type RealMonth, type RealTxn } from "./real-month";
 import { realSplit, replayPlanAmounts, replayReport, simulateReplay } from "./replay";
 import { MAX_EVENTS_PER_WEEK, TEMPLATES, type TemplateCtx } from "./templates";
 
@@ -157,5 +157,63 @@ describe("plan and report", () => {
     const tight = replayReport(simulateReplay(firstJob(), { needs: 30, wants: 10, savings: 60, emergency: 0 }, "first-job"));
     expect(tight.score).toBeLessThan(loose.score);
     expect(tight.envelopes[0].actual).toBe(loose.envelopes[0].actual); // same real spending
+  });
+});
+
+describe("friend money in the replay follows what the player said it was", () => {
+  let n = 0;
+  const t = (day: number, over: Partial<RealTxn>): RealTxn => ({
+    id: `fr${++n}`,
+    datetime: `2026-08-${String(day).padStart(2, "0")}T19:00:00+05:30`,
+    amount: 100,
+    type: "DR",
+    channel: "UPI",
+    counterparty: "Someone",
+    category: "Food",
+    confidence: "user",
+    ...over,
+  });
+  const month = () =>
+    buildRealMonth(
+      "2026-08",
+      [
+        t(1, { type: "CR", category: "Salary/Stipend", amount: 20000, counterparty: "Employer" }),
+        t(3, { category: "Friend", amount: 650, counterparty: "Arjun P" }), // lent
+        t(10, { type: "CR", category: "Friend", amount: 300, counterparty: "Arjun P" }), // paid back
+        t(16, { type: "CR", category: "Borrowed from friend", amount: 2000, counterparty: "Rahul Sharma" }), // you owe
+        t(23, { type: "CR", category: "Friend's share", amount: 400, counterparty: "Meera" }), // their share
+      ],
+      { rahulsharma: "Rahul" },
+    );
+
+  test("events say who paid back, who you borrowed from, and whose share came in", () => {
+    const sim = simulateReplay(month(), DEFAULT_PLAN, "first-job");
+    const text = sim.weeks.flatMap((w) => w.events).map((e) => `${e.title} | ${e.body}`);
+    expect(text).toContain("Arjun P paid you back ₹300 | On 10 Aug. Money you lent is coming home.");
+    expect(text).toContain("You borrowed ₹2,000 from Rahul | On 16 Aug. It helped this week, but you owe Rahul ₹2,000.");
+    expect(text.some((x) => x.startsWith("Meera sent their share: ₹400"))).toBe(true);
+    expect(text.join("\n")).not.toMatch(/\b(him|her|his|he|she)\b/i); // no guessing anyone's gender
+  });
+
+  test("the report nets friends from those answers, and borrowed money is owed, not savings", () => {
+    const m = month();
+    const r = replayReport(simulateReplay(m, DEFAULT_PLAN, "first-job"));
+    expect(r.friends).toMatchObject({ owedToYou: 350, youOwe: 2000 });
+    expect(r.friends.friends.map((f) => [f.name, f.net])).toEqual([
+      ["Rahul", -2000],
+      ["Arjun P", 350],
+    ]);
+    expect(r.cameInParts).toEqual([
+      { label: "income", amount: 20000 },
+      { label: "from friends", amount: 700 },
+      { label: "borrowed from friends", amount: 2000 },
+    ]);
+    // Kept = everything you had and got, minus what you spent and lent, minus what you owe Rahul.
+    const opening = monthMoney(m).opening;
+    expect(r.savingsKept).toBe(opening + 20000 + 300 + 400 - 650);
+  });
+
+  test("the template library stays within 40-60", () => {
+    expect(TEMPLATES.length).toBeLessThanOrEqual(60);
   });
 });

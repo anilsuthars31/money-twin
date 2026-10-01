@@ -4,7 +4,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { LESSON_ORDER } from "@/game/lessons";
 import { cleanTwinName, twinNameProblem } from "@/game/twin-name";
-import { ALL_CATEGORIES, FRIEND_MODES } from "@/lib/categories";
+import { ALL_CATEGORIES, FRIEND_MODES, FRIEND_RECEIVED } from "@/lib/categories";
 import { connectDb } from "@/lib/db";
 import { User } from "@/models/User";
 
@@ -88,6 +88,8 @@ export const saveOverridesBody = z
             nickname: z.string().trim().min(1).max(40).nullable().optional(),
             // For Friend labels: was money sent to them mostly lending, or your share of outings?
             friendMode: z.enum(FRIEND_MODES as [string, ...string[]]).optional(),
+            // For Friend labels: was money they sent you paying back, their share, or a loan to you?
+            friendReceived: z.enum(FRIEND_RECEIVED as [string, ...string[]]).optional(),
           })
           .strict(),
       )

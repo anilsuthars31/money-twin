@@ -67,7 +67,7 @@ export function monthSummary(m: RealMonth): DashMonth {
     label: m.label,
     short: new Date(Date.UTC(m.year, m.month - 1, 1)).toLocaleString("en-IN", { month: "short", timeZone: "UTC" }),
     income: round(money.income),
-    extra: round(money.extra + money.friendBack),
+    extra: round(money.extra + money.friendBack + money.borrowed),
     cameIn: round(cameIn(money)),
     cameInParts: cameInParts(money),
     spent: round(money.spent),

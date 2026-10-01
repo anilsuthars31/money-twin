@@ -35,6 +35,8 @@ export type Flow =
   | "income" // money you can plan with: salary, stipend, money from home…
   | "extra" // unplanned money in: refunds, cashback, interest
   | "friend-back" // a friend paying you back
+  | "their-share" // a friend's share of something you paid for: money back, not a loan
+  | "borrowed" // money you borrowed from a friend: in your pocket, but you owe it
   | "ignore"; // transfers between your own accounts, internal bank moves
 
 const NEED_CATEGORIES = new Set([
@@ -87,6 +89,8 @@ export function flowOf(t: RealTxn): Flow {
   if (IGNORE_CATEGORIES.has(t.category)) return "ignore";
   if (t.type === "CR") {
     if (t.category === "Friend") return "friend-back";
+    if (t.category === "Friend's share") return "their-share";
+    if (t.category === "Borrowed from friend") return "borrowed";
     if (EXTRA_CATEGORIES.has(t.category)) return "extra";
     return INCOME_CATEGORIES.has(t.category) ? "income" : "extra";
   }
@@ -152,7 +156,8 @@ export interface MonthMoney {
   needs: number;
   wants: number;
   lent: number;
-  friendBack: number;
+  friendBack: number; // friends paying you back, or their share of something you paid for
+  borrowed: number; // borrowed from friends (you owe it)
 }
 
 export function monthMoney(m: RealMonth): MonthMoney {
@@ -165,23 +170,27 @@ export function monthMoney(m: RealMonth): MonthMoney {
     wants: by("want"),
     spent: by("need") + by("want"),
     lent: by("lent"),
-    friendBack: by("friend-back"),
+    friendBack: by("friend-back") + by("their-share"),
+    borrowed: by("borrowed"),
   };
 }
 
+type CameIn = Pick<MonthMoney, "income" | "extra" | "friendBack"> & { borrowed?: number };
+
 /**
  * "Came in", one definition everywhere (month list, planner, report card, dashboard): income plus
- * refunds/cashback/interest plus friends paying you back. Only moves between your own accounts and
- * internal bank entries are left out.
+ * refunds/cashback/interest plus money from friends (paying back, their share, or lent to you).
+ * Only moves between your own accounts and internal bank entries are left out.
  */
-export const cameIn = (m: Pick<MonthMoney, "income" | "extra" | "friendBack">) => m.income + m.extra + m.friendBack;
+export const cameIn = (m: CameIn) => m.income + m.extra + m.friendBack + (m.borrowed ?? 0);
 
 /** The parts of "came in" that aren't zero: "₹9,500 income + ₹150 refunds & cashback + ₹300 from friends". */
-export function cameInParts(m: Pick<MonthMoney, "income" | "extra" | "friendBack">) {
+export function cameInParts(m: CameIn) {
   return [
     { label: "income", amount: Math.round(m.income) },
     { label: "refunds & cashback", amount: Math.round(m.extra) },
     { label: "from friends", amount: Math.round(m.friendBack) },
+    { label: "borrowed from friends", amount: Math.round(m.borrowed ?? 0) },
   ].filter((p) => p.amount > 0);
 }
 

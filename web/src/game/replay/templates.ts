@@ -1,4 +1,5 @@
 import type { Envelope, EventTone, GameEvent, IconName, Ledger, LessonId, MoodDelta, Raid } from "../types";
+import { netFriends } from "@/lib/friends";
 import { dayOf, flowOf, hourOf, ist, isDelivery, isMicro, isSpend, nameOf, payeeKey, type RealMonth, type RealTxn } from "./real-month";
 
 // The event template library for "Replay your real past". Plain rules, no AI: each template has a
@@ -628,7 +629,32 @@ export const TEMPLATES: EventTemplate[] = [
     fire: (c) => {
       const back = c.weekTxns.filter((x) => flowOf(x) === "friend-back");
       if (!back.length) return null;
-      return ev(`${who(c, back[0])} paid you back`, `${inr(sum(back))} this week. Money you lent is coming home.`, { icon: "users", tone: "good", amount: sum(back), delta: { happiness: 3, stress: -3 } });
+      return ev(`${who(c, back[0])} paid you back ${inr(sum(back))}`, `On ${onDate(c, back.at(-1)!)}. Money you lent is coming home.`, { icon: "users", tone: "good", amount: sum(back), delta: { happiness: 3, stress: -3 } });
+    },
+  },
+  {
+    id: "borrowed-from-friend",
+    group: "friends",
+    repeats: true,
+    fire: (c) => {
+      const t = biggest(c.weekTxns.filter((x) => flowOf(x) === "borrowed"));
+      if (!t) return null;
+      const name = who(c, t);
+      return ev(`You borrowed ${inr(t.amount)} from ${name}`, `On ${onDate(c, t)}. It helped this week, but you owe ${name} ${inr(t.amount)}.`, {
+        icon: "credit-card", tone: "bad", amount: t.amount, delta: { stress: 8 }, lesson: "emergency-fund",
+      });
+    },
+  },
+  {
+    id: "friend-their-share",
+    group: "friends",
+    repeats: true,
+    fire: (c) => {
+      const s = c.weekTxns.filter((x) => flowOf(x) === "their-share");
+      if (!s.length) return null;
+      return ev(`${who(c, s[0])} sent their share: ${inr(sum(s))}`, "For something you paid for. Money back on your own spending, not a loan.", {
+        icon: "users", tone: "good", amount: sum(s), delta: { happiness: 2 },
+      });
     },
   },
   {
@@ -644,8 +670,7 @@ export const TEMPLATES: EventTemplate[] = [
     id: "friends-owe-you",
     group: "friends",
     fire: (c) => {
-      const all = monthSoFar(c);
-      const owed = sum(all.filter((x) => flowOf(x) === "lent")) - sum(all.filter((x) => flowOf(x) === "friend-back"));
+      const owed = netFriends(monthSoFar(c)).owedToYou;
       if (owed < over(c, 0.08, 500) || c.week < 2) return null;
       return ev(`Friends owe you ${inr(owed)}`, `That's ${pct(c, owed)}% of your income out on loan this month.`, { icon: "users", tone: "bad", amount: owed, delta: { stress: 6 } });
     },

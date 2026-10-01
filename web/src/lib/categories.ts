@@ -54,14 +54,30 @@ export const RULE_CATEGORIES = [
   "Internal (ignore)",
 ] as const;
 
-export const ALL_CATEGORIES = [...new Set<string>([...TEACH_CATEGORIES, ...INCOME_CATEGORIES, ...RULE_CATEGORIES, "Self"])];
+/**
+ * Money a friend sent you, by what it was (see FriendReceived): "Friend" itself means paying you
+ * back; these two are their share of something you paid for, and money you borrowed from them.
+ */
+export const FRIEND_THEIR_SHARE = "Friend's share";
+export const BORROWED_FROM_FRIEND = "Borrowed from friend";
+
+export const ALL_CATEGORIES = [
+  ...new Set<string>([...TEACH_CATEGORIES, ...INCOME_CATEGORIES, ...RULE_CATEGORIES, "Self", FRIEND_THEIR_SHARE, BORROWED_FROM_FRIEND]),
+];
 
 /**
  * What money sent to a friend mostly was. "lend": they owe it back. "share": your part of things
- * you did together, which is your own spending. Money a friend sends you is never income either way.
+ * you did together, which is your own spending.
  */
 export type FriendMode = "lend" | "share";
 export const FRIEND_MODES: FriendMode[] = ["lend", "share"];
+
+/**
+ * What money a friend sent you mostly was. "payback": paying back what you lent. "their-share":
+ * their part of something you paid for. "borrowed": you borrowed it, so you owe them. Never income.
+ */
+export type FriendReceived = "payback" | "their-share" | "borrowed";
+export const FRIEND_RECEIVED: FriendReceived[] = ["payback", "their-share", "borrowed"];
 
 /** The hour in India (IST) for a stored Date or an ISO string like "2026-08-03T13:10:00+05:30". */
 export function istHour(datetime: string | Date): number {
@@ -87,12 +103,18 @@ export function categoryForLabel(
   label: string,
   t: { type: "DR" | "CR"; amount: number; datetime: string | Date },
   friendMode?: FriendMode,
+  friendReceived?: FriendReceived,
 ): string {
   if (label === "Self") return "Self Transfer";
   if (label === "Family") return t.type === "CR" ? "Family Support" : "Sent to Family";
   if (label === "Friend" && friendMode === "share" && t.type === "DR") return friendShareCategory(t);
-  return label;
+  if (label === "Friend" && t.type === "CR" && friendReceived === "their-share") return FRIEND_THEIR_SHARE;
+  if (label === "Friend" && t.type === "CR" && friendReceived === "borrowed") return BORROWED_FROM_FRIEND;
+  return label; // a friend paying you back stays "Friend"
 }
+
+/** Money with friends that's part of a loan, either way ("Friend" both ways, or borrowed). */
+export const isFriendCategory = (c: string) => c === "Friend" || c === FRIEND_THEIR_SHARE || c === BORROWED_FROM_FRIEND;
 
 /** How payee names are compared: case-insensitive, spaces ignored ("Ramesh Kumar" → "rameshkumar"). */
 export const payeeKey = (name: string) => name.toLowerCase().replace(/\s+/g, "");

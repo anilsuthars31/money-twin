@@ -1,5 +1,6 @@
 import { STARTING_MOOD, gradeMonth, gradeSave, gradeSpend, type EnvelopeReview, type Grade } from "../engine";
 import { autoSave, ledgerFromAmounts, receive, saved, spend, walletOf } from "../ledger";
+import { netFriends, type FriendLine } from "@/lib/friends";
 import type { LessonContext } from "../lessons";
 import type { CharacterType, Envelope, GameEvent, Ledger, LessonId, MoodDelta, Plan, Raid, Stats } from "../types";
 import {
@@ -13,7 +14,6 @@ import {
   isSpend,
   monthMoney,
   nameOf,
-  payeeKey,
   weeksOf,
   type MonthMoney,
   type RealMonth,
@@ -118,9 +118,14 @@ export function simulateReplay(
     const raids: Raid[] = [];
     // Money coming in this week (refunds, cashback, friends paying back) lands first, so an envelope
     // is never raided for a gap that this week's own money fills. Then payments, in date order.
+    // Money borrowed from a friend is spendable, but it's owed: it lands in Wants and adds to debt.
     for (const t of week) {
       const flow = flowOf(t);
-      if (flow === "extra" || flow === "friend-back") receive(ledger, t.amount);
+      if (flow === "extra" || flow === "friend-back" || flow === "their-share") receive(ledger, t.amount);
+      else if (flow === "borrowed") {
+        ledger.wants += t.amount;
+        ledger.debt += t.amount;
+      }
     }
     for (const t of week) {
       const flow = flowOf(t);
@@ -177,11 +182,7 @@ export interface CategoryRow {
   share: number; // of all spending, 0-100
 }
 
-export interface FriendLine {
-  key: string;
-  name: string;
-  net: number; // > 0 they owe you
-}
+export type { FriendLine } from "@/lib/friends";
 
 export interface ReplayReport {
   monthKey: string;
@@ -213,7 +214,7 @@ export function replayReport(sim: ReplaySim): ReplayReport {
   const { month: m, money, planned, plan } = sim;
   const needsSpent = money.needs;
   const wantsSpent = money.wants + money.lent; // lent money also left Wants
-  const wantsBudget = planned.wants + money.extra + money.friendBack;
+  const wantsBudget = planned.wants + money.extra + money.friendBack + money.borrowed;
 
   // Month end: unspent Needs, Wants and Emergency are swept into Savings, and any debt is repaid from it.
   const l = sim.ledger;
@@ -291,18 +292,8 @@ export function replayReport(sim: ReplaySim): ReplayReport {
     .map((r) => ({ ...r, amount: Math.round(r.amount), share: Math.round((r.amount / Math.max(1, money.spent)) * 100) }))
     .sort((a, b) => b.amount - a.amount);
 
-  // Friends: what you lent minus what they paid back ("my share" friends aren't loans).
-  const fr = new Map<string, FriendLine>();
-  for (const t of m.txns) {
-    const f = flowOf(t);
-    if (f !== "lent" && f !== "friend-back") continue;
-    const key = payeeKey(t.counterparty);
-    if (m.friendModes[key] === "share") continue;
-    const line = fr.get(key) ?? { key, name: nameOf(m, t.counterparty), net: 0 };
-    line.net += f === "lent" ? t.amount : -t.amount;
-    fr.set(key, line);
-  }
-  const friendLines = [...fr.values()].filter((f) => Math.round(f.net) !== 0).sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+  // Friends: lent minus paid back (never below zero), minus borrowed (src/lib/friends.ts).
+  const friends = netFriends(m.txns, (c) => nameOf(m, c));
 
   const lessonsFromEvents = sim.weeks.flatMap((w) => w.events.map((e) => e.lesson)).filter(Boolean) as LessonId[];
   const lesson: LessonId =
@@ -338,7 +329,7 @@ export function replayReport(sim: ReplaySim): ReplayReport {
     score,
     headline,
     income: money.income,
-    extra: money.extra + money.friendBack,
+    extra: money.extra + money.friendBack + money.borrowed,
     cameIn: cameIn(money),
     cameInParts: cameInParts(money),
     spent: money.spent,
@@ -348,11 +339,7 @@ export function replayReport(sim: ReplaySim): ReplayReport {
     goal: sim.goal,
     envelopes,
     categories,
-    friends: {
-      friends: friendLines,
-      owedToYou: friendLines.reduce((s, f) => s + Math.max(0, f.net), 0),
-      youOwe: friendLines.reduce((s, f) => s + Math.max(0, -f.net), 0),
-    },
+    friends,
     lesson,
     lessons,
     finalStats: { ...sim.stats, goal: clamp((Math.max(0, savingsKept) / sim.goal) * 100) },

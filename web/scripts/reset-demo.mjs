@@ -77,9 +77,10 @@ async function main() {
   const text = readFileSync(join(web, "public/sample-kotak-statement.csv"), "utf8");
   const { transactions } = await st.processStatements([{ name: "sample.csv", text }]);
   const labels = { rameshkumar: "Family", sunitadevi: "Family", arjunp: "Friend", shanthipg: "Rent/PG", ravikumark: "Food" };
-  const modes = { arjunp: "lend" };
+  const modes = { arjunp: "lend" }; // money sent to Arjun: lending
+  const received = { arjunp: "payback" }; // money from Arjun: paying back
   const nicknames = { shanthipg: "PG rent", ravikumark: "Canteen anna" };
-  const labelled = st.applyLabels(transactions, labels, modes);
+  const labelled = st.applyLabels(transactions, labels, modes, received);
   await demo.json("/api/transactions", "POST", { transactions: labelled.map(st.toApiTransaction) });
   const names = new Map(transactions.map((t) => [t.counterparty.toLowerCase().replace(/\s+/g, ""), t.counterparty]));
   await demo.json("/api/overrides", "PUT", {
@@ -88,6 +89,7 @@ async function main() {
       category,
       ...(nicknames[key] && { nickname: nicknames[key] }),
       ...(modes[key] && { friendMode: modes[key] }),
+      ...(received[key] && { friendReceived: received[key] }),
     })),
   });
 

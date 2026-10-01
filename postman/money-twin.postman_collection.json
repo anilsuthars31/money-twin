@@ -476,10 +476,10 @@
                 "overrides"
               ]
             },
-            "description": "Upserts labels and re-labels matching saved transactions (name compared without case or spaces). Family becomes Family Support (money in) or Sent to Family (money out); Self is a transfer; Friend is a split/loan: `friendMode` \"lend\" (they owe it back) or \"share\" (your share of outings, counted as your spending as Food/Entertainment). Income reasons (Salary/Stipend, Scholarship, Refund, Sold something, Other income) are valid categories. Optional `nickname` (max 40) is shown instead of the UPI name; omit to keep it, null to remove it.",
+            "description": "Upserts labels and re-labels matching saved transactions (name compared without case or spaces). Family becomes Family Support (money in) or Sent to Family (money out); Self is a transfer; Friend is a split/loan: `friendMode` \"lend\" (they owe it back) or \"share\" (your share of outings, counted as your spending as Food/Entertainment). Income reasons (Salary/Stipend, Scholarship, Refund, Sold something, Other income) are valid categories. Optional `nickname` (max 40) is shown instead of the UPI name; omit to keep it, null to remove it. Friends carry what the money was each way: friendMode (money you sent: lend | share) and friendReceived (money they sent: payback | their-share | borrowed).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"overrides\": [\n    {\n      \"counterparty\": \"Manjunath S\",\n      \"category\": \"Food\",\n      \"nickname\": \"Canteen uncle\"\n    },\n    {\n      \"counterparty\": \"Ramesh Kumar\",\n      \"category\": \"Family\"\n    },\n    {\n      \"counterparty\": \"My Own Name\",\n      \"category\": \"Self\"\n    },\n    {\n      \"counterparty\": \"Arjun P\",\n      \"category\": \"Friend\",\n      \"friendMode\": \"lend\"\n    }\n  ]\n}",
+              "raw": "{\n  \"overrides\": [\n    {\n      \"counterparty\": \"Manjunath S\",\n      \"category\": \"Food\",\n      \"nickname\": \"Canteen uncle\"\n    },\n    {\n      \"counterparty\": \"Ramesh Kumar\",\n      \"category\": \"Family\"\n    },\n    {\n      \"counterparty\": \"My Own Name\",\n      \"category\": \"Self\"\n    },\n    {\n      \"counterparty\": \"Arjun P\",\n      \"category\": \"Friend\",\n      \"friendMode\": \"lend\",\n      \"friendReceived\": \"payback\"\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -527,6 +527,11 @@
                   "pm.test('nickname returned', () => {",
                   "  const m = pm.response.json().overrides.find(o => o.counterparty === 'Manjunath S');",
                   "  pm.expect(m.nickname).to.eql('Canteen uncle');",
+                  "});",
+                  "pm.test('friend answers returned', () => {",
+                  "  const a = pm.response.json().overrides.find(o => o.counterparty === 'Arjun P');",
+                  "  pm.expect(a.friendMode).to.eql('lend');",
+                  "  pm.expect(a.friendReceived).to.eql('payback');",
                   "});"
                 ]
               }
@@ -861,7 +866,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('404 after deletion', () => pm.response.to.have.status(404));"
+                  "pm.test('401 after deletion: the account no longer exists', () => pm.response.to.have.status(401));"
                 ]
               }
             }

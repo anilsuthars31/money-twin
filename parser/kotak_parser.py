@@ -28,21 +28,24 @@ CONFIG_FILE = HERE / "config.json"  # personal names: git-ignored, see config.ex
 # ---------------------------------------------------------------- rules
 # (category, [keywords]) - checked in order, first match wins. Lowercase.
 MERCHANT_RULES = [
-    ("Food & Dining", ["swiggy", "zomato", "domino", "pizza", "kfc", "mcdonald", "burger",
-                        "hotel", "cafe", "bakery", "sweets", "restaurant", "chats",
-                        "canteen", "juice", "tea ", "dhaba", "biryani", "food"]),
-    ("Groceries", ["zepto", "blinkit", "instamart", "bigbasket", "dmart", "mart",
-                   "kirana", "provision", "super market", "supermarket", "traders", "general store"]),
-    ("Travel", ["indigo", "airline", "airindia", "ibibo", "makemytrip", "irctc", "redbus", "cleartrip", "goibibo"]),
+    ("Food & Dining", ["swiggy", "zomato", "domino", "pizza", "kfc", "mcdonald", "mc donald", "burger",
+                        "hotel", "cafe", "coffee", "bakery", "sweets", "restaurant", "chats",
+                        "canteen", "juice", "tea ", "dhaba", "biryani", "food", "lassi", "dosa",
+                        "catering", "catring", "uengage"]),
+    ("Groceries", ["zepto", "blinkit", "instamart", "bigbasket", "bbnow", "dmart", "mart",
+                   "kirana", "provision", "super market", "supermarket", "traders", "general store",
+                   "farm fresh"]),
+    ("Travel", ["indigo", "airline", "airindia", "ibibo", "makemytrip", "irctc", "indian railways", "railway",
+                "redbus", "cleartrip", "goibibo"]),
     ("Transport", ["rapido", "uber", "ola ", "bmtc", "metro", "petrol", "fuel", "fastag",
-                   "garage", "auto", "namma yatri"]),
+                   "garage", "auto", "namma yatri", "scooter"]),
     ("Shopping", ["amazon", "flipkart", "myntra", "meesho", "ajio", "lenskart", "jewell",
                   "style union", "styling", "life style", "lifestyle", "delhivery", "fashion", "trends", "bbiege", "footwear", "decathlon"]),
     ("Subscriptions & Apps", ["google india di", "googleindiadigi", "openai", "netflix", "spotify",
                               "hotstar", "prime", "youtube", "apple"]),
     ("Bills & Recharge", ["jio", "airtel", "vi prepaid", "vodafone", "bescom", "electricity",
                           "broadband", "billpay", "recharge"]),
-    ("Education", ["institute", "college", "university", "school", "the secretary", "exam", "coaching"]),
+    ("Education", ["institute", "college", "university", "school", "the secretary", "exam", "coaching", "tutedude"]),
     ("Health", ["health", "pharma", "medical", "clinic", "hospital", "apollo", "medplus", "1mg"]),
     ("Personal Care", ["salon", "saloon", "parlour", "barber", "hair"]),
     ("Govt & Documents", ["unique identifi", "uidai", "passport", "rto"]),
@@ -55,12 +58,32 @@ INCOME_RULES = [
     ("Cash Deposit", ["cash deposit"]),
 ]
 
-# Words that suggest a business rather than a person
-BUSINESS_HINTS = ["enterpri", "store", "shop", "traders", "mart", "pvt", "ltd", "llp",
+# Words that suggest a business rather than a person (prefixes: UPI names are cut at 15 characters)
+BUSINESS_HINTS = ["enterpr", "privat", "sewing", "steel", "brand", "store", "shop", "traders", "mart", "pvt", "ltd", "llp",
                   "services", "agency", "centre", "center", "paytmq", "ibkpos", "@ybl", "q52", "bharatpe"]
 
 # Things that are not real income/spend (internal bank moves)
 IGNORE_PATTERNS = ["ac xfr from gl"]
+
+
+def _keyword_re(kws):
+    """Short keywords (under 5 letters) must be a whole word (plural "s" allowed): "hair" matches
+    "Hair Studio" but not "Chair", "mart" not "Martin". Longer brand names match anywhere, because
+    UPI names are run together and cut at 15 characters. Same rule as web/src/lib/statement/rules.ts."""
+    short = [re.escape(k) for k in kws if len(k.strip()) < 5]
+    long = [re.escape(k) for k in kws if len(k.strip()) >= 5]
+    parts = ([rf"(?:^|[^a-z0-9])(?:{'|'.join(short)})s?(?![a-z])"] if short else []) + ([f"(?:{'|'.join(long)})"] if long else [])
+    return re.compile("|".join(parts))
+
+
+MERCHANT_RE = [(cat, _keyword_re(kws)) for cat, kws in MERCHANT_RULES]
+INCOME_RE = [(cat, _keyword_re(kws)) for cat, kws in INCOME_RULES]
+
+
+def is_known_merchant(name):
+    """A payee the merchant rules know ("Google India Di", "Dominos Pizza"): a business, never a person."""
+    n = name.lower()
+    return any(r.search(n) for _, r in MERCHANT_RE)
 
 
 # ---------------------------------------------------------------- helpers
@@ -106,9 +129,20 @@ def extract_counterparty(desc):
     return "OTHER", desc.strip()
 
 
+# Word hints start a word ("enterpr" for a cut-off "Enterprises"); short ones (mart, shop, pvt, ltd)
+# are whole words, so "mart" matches "Grace Mart" but not "Martin". Others (@ybl, q52) match anywhere.
+def _hint_re(h):
+    if not h.isalpha():
+        return re.escape(h)
+    return rf"(?:^|[^a-z0-9]){h}s?(?![a-z])" if len(h) < 5 else rf"(?:^|[^a-z0-9]){h}"
+
+
+BUSINESS_RE = re.compile("|".join(_hint_re(h) for h in BUSINESS_HINTS))
+
+
 def looks_like_person(name):
     n = name.lower()
-    if any(h in n for h in BUSINESS_HINTS):
+    if BUSINESS_RE.search(n) or is_known_merchant(n):
         return False
     return bool(re.fullmatch(r"(mr |mrs |ms )?[a-z .]+", n))   # letters/spaces only
 
@@ -123,13 +157,15 @@ def categorise(txn, overrides, self_names, family_names):
         return overrides[cp], "user"
 
     if txn["type"] == "CR":
-        for cat, kws in INCOME_RULES:
-            if any(k in desc for k in kws):
+        for cat, r in INCOME_RE:
+            if r.search(desc):
                 return cat, "high"
         if any(s in cp.replace(" ", "") for s in self_names):
             return "Self Transfer", "high"
         if any(f in cp.replace(" ", "") for f in family_names):
             return "Family Support", "medium"
+        if is_known_merchant(cp):  # money back from a shop or app is a refund, not a friend
+            return "Refund", "medium"
         if looks_like_person(cp):
             return "Received from Friends", "medium"
         return "Other Income", "low"
@@ -137,8 +173,8 @@ def categorise(txn, overrides, self_names, family_names):
     # ---- debits
     if txn["channel"] == "ATM":
         return "Cash Withdrawal", "high"
-    for cat, kws in MERCHANT_RULES:
-        if any(k in cp or k in desc for k in kws):
+    for cat, r in MERCHANT_RE:
+        if r.search(cp) or r.search(desc):
             return cat, "high"
     if any(s in cp.replace(" ", "") for s in self_names):
         return "Self Transfer", "high"

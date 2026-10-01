@@ -21,8 +21,16 @@ async function signInAndUpload(page: Page, email: string) {
 }
 
 const labelsOf = async (page: Page) =>
-  ((await (await page.request.get("/api/overrides")).json()).overrides as { counterparty: string; category: string; nickname?: string; friendMode?: string }[])
-    .map((l) => [l.counterparty, l.category, l.nickname ?? "", l.friendMode ?? ""].join(":"))
+  (
+    (await (await page.request.get("/api/overrides")).json()).overrides as {
+      counterparty: string;
+      category: string;
+      nickname?: string;
+      friendMode?: string;
+      friendReceived?: string;
+    }[]
+  )
+    .map((l) => [l.counterparty, l.category, l.nickname ?? "", l.friendMode ?? "", l.friendReceived ?? ""].join(":"))
     .sort();
 
 test("people with money both ways (like a friend) are in Who's who", async ({ page }) => {
@@ -33,20 +41,29 @@ test("people with money both ways (like a friend) are in Who's who", async ({ pa
   await page.request.delete("/api/me");
 });
 
-test("Friend asks once: lending or my share, and only lending counts as 'owes you'", async ({ page }) => {
+test("Friend questions follow the direction money went, and balances use the answers", async ({ page }) => {
   await signInAndUpload(page, `lend-${Date.now()}@example.com`);
   const next = page.getByRole("button", { name: /who are the rest/ });
 
+  // Arjun: money both ways, so both questions, clearly labelled.
   await page.getByRole("radio", { name: "Arjun P: Friend" }).click();
-  const question = page.getByRole("radiogroup", { name: "Money you sent Arjun P was mostly" });
-  await expect(question).toBeVisible();
-  await expect(next).toBeDisabled(); // must answer first
-  await question.getByRole("radio", { name: "Lending to them" }).click();
+  const sent = page.getByRole("radiogroup", { name: "Money you sent Arjun P was mostly" });
+  const got = page.getByRole("radiogroup", { name: "Money Arjun P sent you was mostly" });
+  await expect(page.getByText("What you sent (₹2,140)")).toBeVisible();
+  await expect(page.getByText("What they sent (₹600)")).toBeVisible();
+  await expect(next).toBeDisabled(); // must answer both
+  await sent.getByRole("radio", { name: "Lending to them" }).click();
+  await expect(next).toBeDisabled();
+  await expect(got.getByRole("radio")).toHaveText(["Paying me back", "Their share of things I paid for", "I borrowed from them (I owe them)"]);
+  await got.getByRole("radio", { name: "Paying me back" }).click();
   await expect(next).toBeEnabled();
 
-  // Sunita only ever sent money, so there's nothing to ask.
+  // Sunita only ever sent money: only "what they sent" is asked.
   await page.getByRole("radio", { name: "Sunita Devi: Friend" }).click();
   await expect(page.getByRole("radiogroup", { name: "Money you sent Sunita Devi was mostly" })).toHaveCount(0);
+  await expect(page.getByRole("listitem").filter({ hasText: "Sunita Devi" }).getByText("Money they sent you was mostly:")).toBeVisible();
+  await expect(next).toBeDisabled();
+  await page.getByRole("radiogroup", { name: "Money Sunita Devi sent you was mostly" }).getByRole("radio", { name: /I borrowed from them/ }).click();
   await page.getByRole("radio", { name: "Ramesh Kumar: Family" }).click();
   await next.click();
   await page.getByRole("button", { name: "Finish later and review" }).click();
@@ -56,7 +73,8 @@ test("Friend asks once: lending or my share, and only lending counts as 'owes yo
   await expect(friends).toContainText("You owe friends₹3,000");
   await expect(friends).toContainText("Arjun Powes you ₹1,540");
 
-  // Switch Arjun to "my share": his payments become my spending and he leaves the balances.
+  // Switch Arjun to "my share": what was sent becomes my spending and he leaves the balances
+  // (the ₹600 back can only cancel what's owed, never turn into a debt of mine).
   await page.getByRole("button", { name: "Back" }).click(); // to the cards
   await page.getByRole("button", { name: "Back" }).click(); // to Who's who
   await page.getByRole("radio", { name: "My share of things we did together" }).click();
@@ -67,14 +85,15 @@ test("Friend asks once: lending or my share, and only lending counts as 'owes yo
 
   await page.getByRole("button", { name: "Save to my account" }).click();
   await expect(page.getByRole("heading", { name: "Your twin knows your real months" })).toBeVisible();
-  expect(await labelsOf(page)).toEqual(["Arjun P:Friend::share", "Ramesh Kumar:Family::", "Sunita Devi:Friend::lend"]);
+  expect(await labelsOf(page)).toEqual(["Arjun P:Friend::share:payback", "Ramesh Kumar:Family:::", "Sunita Devi:Friend::lend:borrowed"]);
   const saved = (await (await page.request.get("/api/transactions?limit=5000")).json()).transactions as { counterparty: string; type: string; category: string }[];
   expect(saved.filter((t) => t.counterparty === "Arjun P" && t.type === "DR").every((t) => ["Food", "Entertainment"].includes(t.category))).toBe(true);
   expect(saved.filter((t) => t.counterparty === "Arjun P" && t.type === "CR").every((t) => t.category === "Friend")).toBe(true);
+  expect(saved.filter((t) => t.counterparty === "Sunita Devi").every((t) => t.category === "Borrowed from friend")).toBe(true);
   await page.request.delete("/api/me");
 });
 
-test("Friend on a swipe card asks the same question", async ({ page }) => {
+test("Friend on a swipe card asks the same questions", async ({ page }) => {
   await signInAndUpload(page, `cardfriend-${Date.now()}@example.com`);
   await page.getByRole("radio", { name: "Ramesh Kumar: Family" }).click();
   await page.getByRole("radio", { name: "Sunita Devi: Family" }).click();
@@ -82,7 +101,11 @@ test("Friend on a swipe card asks the same question", async ({ page }) => {
   const card = page.getByRole("article", { name: /Who is/ });
   await expect(card).toHaveAttribute("aria-label", "Who is Arjun P?"); // unmarked in Who's who, so first
   await card.getByRole("button", { name: /^Arjun P is Friend/ }).click();
+  await expect(card.getByText("What you sent (₹2,140)")).toBeVisible();
+  await expect(card.getByText("What they sent (₹600)")).toBeVisible();
   await card.getByRole("radio", { name: /Lending to them/ }).click();
+  await expect(card).toHaveAttribute("aria-label", "Who is Arjun P?"); // still waiting for the second answer
+  await card.getByRole("radio", { name: /Paying me back/ }).click();
   await expect(card).not.toHaveAttribute("aria-label", "Who is Arjun P?");
   await page.getByRole("button", { name: "Finish later and review" }).click();
   await expect(page.getByRole("region", { name: "Money with friends" })).toContainText("Arjun Powes you ₹1,540");
@@ -135,10 +158,10 @@ test("Other: nickname + category; income reasons for someone who pays you", asyn
   await page.getByRole("button", { name: "Save to my account" }).click();
   await expect(page.getByRole("heading", { name: "Your twin knows your real months" })).toBeVisible();
   expect(await labelsOf(page)).toEqual([
-    "Arjun P:Health:Gym trainer:",
-    "Ramesh Kumar:Family::",
-    "Shanthi Pg:Rent/PG:PG owner:",
-    "Sunita Devi:Salary/Stipend:Tuition parent:",
+    "Arjun P:Health:Gym trainer::",
+    "Ramesh Kumar:Family:::",
+    "Shanthi Pg:Rent/PG:PG owner::",
+    "Sunita Devi:Salary/Stipend:Tuition parent::",
   ]);
 
   // Home page: what's saved, instead of "Bring your twin to life".

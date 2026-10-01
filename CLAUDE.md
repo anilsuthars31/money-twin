@@ -129,10 +129,17 @@ Don't ask for a bank statement first; users won't trust a new app with money dat
 - [x] Teach-your-twin: "Who's who?" (Family · Me (my other account) · Friend · Other, no surname rules; Other needs a
       nickname + category), swipe cards (unmarked people first, then top 20 unknown payees; 6 likeliest categories +
       "More"; optional nickname with quick chips), understanding meter. Labels + nicknames saved as merchant overrides.
-      Friend asks once "Money you sent them was mostly: Lending to them / My share of things we did together"
-      (`friendMode`): only lending counts toward "owes you"; "my share" payments count as spending (Food for small
-      lunch/dinner payments, else Entertainment). Money from friends is never income. Who's who includes anyone with
-      money going both ways. "Other" for someone who mostly pays you asks "Why do they pay you?" with income reasons
+      Friend questions depend on direction (`FriendQuestions`, also on the swipe cards): money you sent →
+      "Lending to them / My share of things we did together" (`friendMode`); money they sent → "Paying me back /
+      Their share of things I paid for / I borrowed from them (I owe them)" (`friendReceived`); both ways → both,
+      labelled "What you sent" / "What they sent". Answers become categories (Friend, "Friend's share", "Borrowed from
+      friend") and `src/lib/friends.ts` nets per friend: lent − paid back (never below zero) − borrowed. "My share"
+      payments are spending (Food for small lunch/dinner payments, else Entertainment). Money from friends is never
+      income; borrowed money is owed in the replay ("You borrowed ₹2,000 from Rahul… you owe Rahul ₹2,000").
+      Who's who includes only person-like payees with money going both ways or real money one way: known merchants
+      (Google India Digital, Domino's…) are never people, and money back from them is a Refund. Merchant keywords were
+      checked against real statements (short keywords and business hints are whole words: "mart" ≠ "Martin"); the
+      Python parser has the same rules, and the local parity test checks both on `statements/`. "Other" for someone who mostly pays you asks "Why do they pay you?" with income reasons
       (Salary/Stipend, Scholarship, Refund, Sold something, Other income). An open, unsaved Other form stays open
       with a warning if another person is picked.
 - [x] Twin in the account: `twins` collection + `/api/twin`; `TwinSync` merges browser and account copies

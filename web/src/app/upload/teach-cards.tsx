@@ -19,7 +19,8 @@ import {
   Utensils,
   type LucideIcon,
 } from "lucide-react";
-import type { FriendMode, TeachCategory } from "@/lib/categories";
+import type { FriendMode, FriendReceived, TeachCategory } from "@/lib/categories";
+import { FriendQuestions, friendAnswered, type FriendAnswers } from "./friend-questions";
 import type { PayeeCard } from "@/lib/statement";
 import { cn } from "@/lib/utils";
 import { UnderstandingMeter } from "./understanding-meter";
@@ -44,7 +45,13 @@ const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 const SWIPE = 90; // px to count as a swipe
 
 /** One answer: the category (null = skipped), an optional nickname, and for friends, lending or share. */
-export type Decision = { key: string; category: TeachCategory | null; nickname?: string; friendMode?: FriendMode };
+export type Decision = {
+  key: string;
+  category: TeachCategory | null;
+  nickname?: string;
+  friendMode?: FriendMode; // money you sent them
+  friendReceived?: FriendReceived; // money they sent you
+};
 
 /**
  * One payee at a time: who they are in numbers, and six likely categories (the rest under "More").
@@ -75,17 +82,18 @@ export function TeachCards({
   const [more, setMore] = useState(false);
   const [naming, setNaming] = useState(false);
   const [nickname, setNickname] = useState("");
-  const [askFriend, setAskFriend] = useState(false); // "Money you sent them was mostly…"
+  const [askFriend, setAskFriend] = useState(false); // what the money with this friend was
+  const [friendAnswers, setFriendAnswers] = useState<FriendAnswers>({});
   const [dx, setDx] = useState(0);
   const [leaving, setLeaving] = useState<"left" | "right" | null>(null);
   const drag = useRef<{ x: number; id: number } | null>(null);
   const [dragging, setDragging] = useState(false);
 
   const decide = useCallback(
-    (category: TeachCategory | null, friendMode?: FriendMode) => {
+    (category: TeachCategory | null, friend?: FriendAnswers) => {
       if (!card || leaving) return;
-      // Friends you've paid: ask once whether that was lending or your share before recording it.
-      if (category === "Friend" && card.total > 0 && !friendMode) return setAskFriend(true);
+      // Friends: ask what the money was, for each direction it went, before recording it.
+      if (category === "Friend" && !friendAnswered(card.total, card.moneyBack, friend ?? {})) return setAskFriend(true);
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const name = nickname.trim().slice(0, 40);
       const commit = () => {
@@ -93,7 +101,8 @@ export function TeachCards({
           key: card.key,
           category,
           ...(category && name && { nickname: name }),
-          ...(category === "Friend" && { friendMode: friendMode ?? "lend" }),
+          ...(category === "Friend" && { friendMode: friend?.mode ?? "lend" }),
+          ...(category === "Friend" && friend?.received && { friendReceived: friend.received }),
         });
         setLeaving(null);
         setDx(0);
@@ -101,6 +110,7 @@ export function TeachCards({
         setNaming(false);
         setNickname("");
         setAskFriend(false);
+        setFriendAnswers({});
       };
       if (reduce) return commit();
       setLeaving(category ? "right" : "left");
@@ -277,33 +287,28 @@ export function TeachCards({
         )}
 
         {askFriend && (
-          <fieldset className="mt-4 rounded-2xl bg-money/10 p-3 ring-1 ring-money/30">
-            <legend className="px-1 text-sm font-semibold">Money you sent them was mostly:</legend>
-            <div className="mt-1.5 grid gap-1.5" role="radiogroup" aria-label={`Money you sent ${card.counterparty} was mostly`}>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={false}
-                onClick={() => decide("Friend", "lend")}
-                className="min-h-11 rounded-xl bg-raised px-3 text-left text-sm font-semibold ring-1 ring-white/10 hover:bg-white/10"
-              >
-                Lending to them <span className="block text-xs font-normal text-muted-foreground">They owe it back</span>
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={false}
-                onClick={() => decide("Friend", "share")}
-                className="min-h-11 rounded-xl bg-raised px-3 text-left text-sm font-semibold ring-1 ring-white/10 hover:bg-white/10"
-              >
-                My share of things we did together
-                <span className="block text-xs font-normal text-muted-foreground">Counts as your spending (food, outings)</span>
-              </button>
-            </div>
-            <button type="button" onClick={() => setAskFriend(false)} className="mt-2 px-1 text-xs text-muted-foreground underline-offset-4 hover:underline">
+          <div className="mt-4 rounded-2xl bg-money/10 p-2 ring-1 ring-money/30">
+            <FriendQuestions
+              name={card.counterparty}
+              sent={card.total}
+              received={card.moneyBack}
+              answers={friendAnswers}
+              onChange={(a) => {
+                setFriendAnswers(a);
+                if (friendAnswered(card.total, card.moneyBack, a)) decide("Friend", a);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setAskFriend(false);
+                setFriendAnswers({});
+              }}
+              className="mt-2 px-2 text-xs text-muted-foreground underline-offset-4 hover:underline"
+            >
               Not a friend after all
             </button>
-          </fieldset>
+          </div>
         )}
 
         <div className={cn("mt-4 grid grid-cols-2 gap-2", askFriend && "hidden")}>

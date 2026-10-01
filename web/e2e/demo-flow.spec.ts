@@ -71,6 +71,7 @@ test("the full demo flow for a new account", async ({ page }) => {
   await page.getByRole("radio", { name: "Sunita Devi: Family" }).click();
   await page.getByRole("radio", { name: "Arjun P: Friend" }).click();
   await page.getByRole("radio", { name: "Lending to them" }).click();
+  await page.getByRole("radio", { name: "Paying me back" }).click();
   await shot(page, "05-whos-who");
   await page.getByRole("button", { name: /who are the rest/ }).click();
 

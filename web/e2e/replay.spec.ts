@@ -24,6 +24,7 @@ async function uploadSample(page: Page) {
   await page.getByRole("radio", { name: "Sunita Devi: Family" }).click();
   await page.getByRole("radio", { name: "Arjun P: Friend" }).click();
   await page.getByRole("radio", { name: "Lending to them" }).click();
+  await page.getByRole("radio", { name: "Paying me back" }).click();
   await page.getByRole("button", { name: /who are the rest/ }).click();
   await page.getByRole("button", { name: "Shanthi Pg is Rent/PG (likely)" }).click();
   await page.getByRole("button", { name: "Finish later and review" }).click();

@@ -15,6 +15,8 @@ const merchantOverrideSchema = new Schema(
     nickname: { type: String, maxlength: 40 },
     /** For friends: money sent to them was mostly lending ("lend") or their share of outings ("share"). */
     friendMode: { type: String, enum: ["lend", "share"] },
+    /** For friends: money they sent you was paying you back, their share, or money you borrowed. */
+    friendReceived: { type: String, enum: ["payback", "their-share", "borrowed"] },
   },
   { timestamps: true, collection: "merchantOverrides" },
 );

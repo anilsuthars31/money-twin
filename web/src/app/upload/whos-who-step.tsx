@@ -3,29 +3,27 @@
 import { useState } from "react";
 import { ArrowRight, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { INCOME_CATEGORIES, TEACH_CATEGORIES, type FriendMode } from "@/lib/categories";
+import { INCOME_CATEGORIES, TEACH_CATEGORIES, type FriendMode, type FriendReceived } from "@/lib/categories";
 import type { PersonCandidate } from "@/lib/statement";
 import { cn } from "@/lib/utils";
+import { FriendQuestions, friendAnswered } from "./friend-questions";
 
 /**
  * What the player says about a person. "Other" always comes with a nickname and a category;
- * "Friend" with whether money sent to them was lending or their share of things done together.
+ * "Friend" with what the money was, for each direction it went (see FriendQuestions).
  */
 export type PersonTag =
   | { kind: "Family" | "Self" }
-  | { kind: "Friend"; mode?: FriendMode }
+  | { kind: "Friend"; mode?: FriendMode; received?: FriendReceived }
   | { kind: "Other"; nickname: string; category: string };
 
-/** The friend mode to save for a tag (if it's a friend). */
+/** The friend answers to save for a tag (if it's a friend). */
 export const tagMode = (t: PersonTag): FriendMode | undefined => (t.kind === "Friend" ? (t.mode ?? "lend") : undefined);
+export const tagReceived = (t: PersonTag): FriendReceived | undefined => (t.kind === "Friend" ? t.received : undefined);
 
-/** A Friend you've sent money to must say whether it was lending or your share. */
-export const needsFriendMode = (p: PersonCandidate, t: PersonTag | null) => t?.kind === "Friend" && p.sent > 0 && !t.mode;
-
-const FRIEND_MODE_OPTIONS: { mode: FriendMode; label: string }[] = [
-  { mode: "lend", label: "Lending to them" },
-  { mode: "share", label: "My share of things we did together" },
-];
+/** A Friend must say what the money was, for each direction it went. */
+export const needsFriendMode = (p: PersonCandidate, t: PersonTag | null) =>
+  t?.kind === "Friend" && !friendAnswered(p.sent, p.received, { mode: t.mode, received: t.received });
 
 /** The label saved for a tag: Family / Self / Friend, or the category chosen for "Other". */
 export const tagCategory = (t: PersonTag): string => (t.kind === "Other" ? t.category : t.kind);
@@ -229,36 +227,17 @@ export function WhosWhoStep({
                   })}
                 </div>
 
-                {tag?.kind === "Friend" && p.sent > 0 && (
-                  <fieldset className="mt-3 rounded-2xl bg-white/[0.04] p-3">
-                    <legend className="px-1 text-sm font-medium">Money you sent them was mostly:</legend>
-                    <div className="mt-1.5 grid gap-1.5" role="radiogroup" aria-label={`Money you sent ${p.counterparty} was mostly`}>
-                      {FRIEND_MODE_OPTIONS.map((o) => (
-                        <button
-                          key={o.mode}
-                          type="button"
-                          role="radio"
-                          aria-checked={tag.mode === o.mode}
-                          onClick={() => {
-                            if (!blockedBy(p.key)) onTag(p.key, { kind: "Friend", mode: o.mode });
-                          }}
-                          className={cn(
-                            "min-h-10 rounded-xl px-3 text-left text-sm font-medium ring-1 transition",
-                            tag.mode === o.mode ? "bg-money/15 text-money ring-money/60" : "bg-white/[0.03] ring-white/10 hover:bg-white/[0.07]",
-                          )}
-                        >
-                          {o.label}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="mt-2 px-1 text-xs text-muted-foreground">
-                      {tag.mode === "share"
-                        ? "What you paid counts as your own spending (food, outings)."
-                        : tag.mode === "lend"
-                          ? "What you sent counts as money they owe you."
-                          : "Only lending counts as money they owe you."}
-                    </p>
-                  </fieldset>
+                {tag?.kind === "Friend" && (
+                  <FriendQuestions
+                    className="mt-3"
+                    name={p.counterparty}
+                    sent={p.sent}
+                    received={p.received}
+                    answers={{ mode: tag.mode, received: tag.received }}
+                    onChange={(a) => {
+                      if (!blockedBy(p.key)) onTag(p.key, { kind: "Friend", ...a });
+                    }}
+                  />
                 )}
 
                 {tag?.kind === "Other" && !isEditing && (
@@ -294,7 +273,7 @@ export function WhosWhoStep({
         Next: who are the rest? <ArrowRight data-icon="inline-end" />
       </Button>
       {friendQuestionOpen && (
-        <p className="text-center text-xs text-muted-foreground">Answer how you sent money to each friend first.</p>
+        <p className="text-center text-xs text-muted-foreground">Say what the money with each friend was first.</p>
       )}
       {unmarked > 0 && (
         <p className="text-center text-xs text-muted-foreground">
